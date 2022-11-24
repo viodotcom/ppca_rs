@@ -1,0 +1,26 @@
+import numpy as np
+from ppca import PPCAModel
+
+print("Generating model")
+
+transform = np.random.binomial(1.0, 0.1, size=(200, 16))
+real_model = PPCAModel(
+    transform=transform.astype("float32"),
+    isotropic_noise=0.1,
+    mean=np.zeros((200, 1), dtype="float32"),
+)
+
+print("Generating syntetic sample")
+sample = real_model.sample_masked(100_000, 0.2)
+
+print("Initializing model")
+model = PPCAModel.init(16, sample)
+
+print("Starting iterations...")
+
+for it in range(24):
+    print(f"At iteration {it + 1} PPCA llk is {model.llk_masked(sample) / len(sample)}")
+    model = model.iterate_masked(sample)
+    print("Done creating iterated model")
+
+print("Model trained")
