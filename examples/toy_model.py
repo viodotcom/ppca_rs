@@ -1,11 +1,11 @@
 import numpy as np
 
-from ppca import PPCAModel, Dataset
+from ppca_rs import PPCAModel, Dataset
 
 real_model = PPCAModel(
-    transform=np.matrix([[1, 1, 0], [1, 0, 1]], dtype="float32").T,
+    transform=np.matrix([[1, 1, 0], [1, 0, 1]], dtype="float64").T,
     isotropic_noise=0.1,
-    mean=np.array([0, 1, 0], dtype="float32"),
+    mean=np.array([0, 1, 0], dtype="float64"),
 )
 sample = real_model.sample_masked(100, mask_prob=0.2)
 model = PPCAModel.init(2, sample)

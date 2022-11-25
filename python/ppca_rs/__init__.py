@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from .ppca_rs import *
+
 from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-
-from .ppca import Dataset, PPCAModel
-
 
 @dataclass(frozen=True)
 class TrainMetrics:

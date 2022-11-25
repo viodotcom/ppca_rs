@@ -1,13 +1,13 @@
 import numpy as np
-from ppca import PPCAModel
+from ppca_rs import PPCAModel
 
 print("Generating model")
 
 transform = np.random.binomial(1.0, 0.1, size=(200, 16))
 real_model = PPCAModel(
-    transform=transform.astype("float32"),
+    transform=transform.astype("float64"),
     isotropic_noise=0.1,
-    mean=np.zeros((200, 1), dtype="float32"),
+    mean=np.zeros((200, 1), dtype="float64"),
 )
 
 print("Generating syntetic sample")

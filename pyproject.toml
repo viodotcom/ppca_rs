@@ -3,14 +3,24 @@ requires = ["maturin>=0.13,<0.14"]
 build-backend = "maturin"
 
 [project]
-name = "ppca"
+name = "ppca-rs"
+version = "0.1.0"
 requires-python = ">=3.7"
+description = "Python+Rust implementation of the Probabilistic Principal Component Analysis model"
+readme = "readme.md"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = ["cffi", "numpy"]
+
+[[project.authors]]
+"name" = "Pedro B. Arruda"
+"email" = "parruda@findhotel.net"
+
+[project.urls]
+"Homepage" = "https://github.com/FindHotel/ppca"
 
 [tool.maturin]
 python-source = "python"

@@ -11,7 +11,7 @@ use crate::{
 
 /// This module is implemented in Rust.
 #[pymodule]
-pub fn ppca(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PPCAModelWrapper>()?;
     m.add_class::<DatasetWrapper>()?;
     m.add_class::<InferredMaskedBatch>()?;

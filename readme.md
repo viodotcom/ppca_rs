@@ -14,7 +14,7 @@ pip install ppca # hopefully!
 
 ```python
 import numpy as np
-from ppca import Dataset, PPCATrainer, PPCA
+from ppca_rs import Dataset, PPCATrainer, PPCA
 
 samples: np.ndarray
 
