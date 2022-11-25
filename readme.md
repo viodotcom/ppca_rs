@@ -6,7 +6,7 @@ This project implements a PPCA model implemented in Rust for Python using `pyO3`
 
 PyPI package comming soon:
 ```bash
-pip install ppca # hopefully!
+pip install ppca_rs # hopefully!
 ```
 
 

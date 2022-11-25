@@ -24,3 +24,4 @@ dependencies = ["cffi", "numpy"]
 
 [tool.maturin]
 python-source = "python"
+sdist-include = ["license", "Readme.md"]
