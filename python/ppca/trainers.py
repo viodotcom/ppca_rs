@@ -16,7 +16,7 @@ class TrainMetrics:
 
 
 @dataclass
-class PPCAMaskedTrainer:
+class PPCATrainer:
     """A trainer for a PPCA Model over masked data."""
 
     # The list of masked samples against which the PPCA will be trained.

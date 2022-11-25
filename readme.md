@@ -1,7 +1,29 @@
-# `Python+Rust` implementation of the _Probabilistic_ Principal Component Analysis model
+# _Probabilistic_ Principal Component Analysis model
 
-This project implements a PPCA model for Python using `pyO3` and `maturin`.
+This project implements a PPCA model implemented in Rust for Python using `pyO3` and `maturin`.
 
+
+## Quick example
+
+```python
+from ppca import Dataset, PPCATrainer, PPCA
+
+# Create your dataset from a rank 2 np.ndarray, where each line is a sample. Use non-finite values (`inf`s and `nan`) to signal masked values
+dataset = Dataset(samples)
+
+# Train the model:
+model: PPCAModel = PPCATrainer(dataset).train(state_size=10, n_iters=10)
+
+
+# And now, let's have fun!
+
+# Extrapolates the missing values with the most probable values:
+model.extrapolate(dataset)
+
+
+# Smooths (removes noise from) samples and fills in missing values:
+model.filter_extrapolate(dataset)
+```
 
 ## Building from soure
 
