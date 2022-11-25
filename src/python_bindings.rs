@@ -110,7 +110,7 @@ impl InferredMaskedBatch {
 }
 
 #[pyclass]
-#[pyo3(name = "PPCAModel", module = "ppca")]
+#[pyo3(name = "PPCAModel", module = "ppca_rs")]
 #[derive(Debug, Clone)]
 struct PPCAModelWrapper(PPCAModel);
 
