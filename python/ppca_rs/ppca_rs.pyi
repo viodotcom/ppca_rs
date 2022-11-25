@@ -30,7 +30,7 @@ class Dataset:
 
 class InferredMasked:
     """
-    A class containing the result of the Bayesian inference step in `PPCAModel.infer_masked`.
+    A class containing the result of the Bayesian inference step in `PPCAModel.infer`.
     """
 
     def states(self) -> np.ndarray:
@@ -81,18 +81,18 @@ class PPCAModel:
     def init(cls, n_states: int) -> PPCAModel:
         """Creates an uninformed model to seed the trainment."""
     def __repr__(self) -> str: ...
-    def llk_masked(self, dataset: Dataset) -> float:
+    def llk(self, dataset: Dataset) -> float:
         """
         Calculates the log-probability of a given masked dataset according to the current
         model.
         """
-    def sample_masked(self, dataset_size: int, mask_prob: float) -> Dataset:
+    def sample(self, dataset_size: int, mask_prob: float) -> Dataset:
         """
         Samples random outputs from the model and masks each entry according to a
         Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
         generated value.
         """
-    def infer_masked(self, dataset: Dataset) -> InferredMasked:
+    def infer(self, dataset: Dataset) -> InferredMasked:
         """Infers the hidden components for each sample in the dataset."""
     def filter_extrapolate(self, dataset: Dataset) -> Dataset:
         """
@@ -101,7 +101,7 @@ class PPCAModel:
         """
     def extrapolate(self, dataset: Dataset) -> Dataset:
         """Extrapolates the missing values with the most probable values."""
-    def iterate_masked(self, dataset: Dataset) -> PPCAModel:
+    def iterate(self, dataset: Dataset) -> PPCAModel:
         """
         Makes one iteration of the EM algorithm for the PPCA over an onbserved dataset,
         returning the improved model.

@@ -9,7 +9,7 @@ python-source = "python"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "ppca_rs"
-crate-type = ["cdylib"]
+crate-type = ["staticlib"]
 
 [dependencies]
 approx = "0.5.1"

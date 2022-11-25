@@ -193,17 +193,17 @@ impl PPCAModelWrapper {
         )
     }
 
-    fn llk_masked(&self, py: Python<'_>, dataset: &DatasetWrapper) -> f64 {
-        py.allow_threads(|| self.0.llk_masked(&dataset.0))
+    fn llk(&self, py: Python<'_>, dataset: &DatasetWrapper) -> f64 {
+        py.allow_threads(|| self.0.llk(&dataset.0))
     }
 
-    fn sample_masked(&self, py: Python<'_>, dataset_size: usize, mask_prob: f64) -> DatasetWrapper {
-        py.allow_threads(|| DatasetWrapper(self.0.sample_masked(dataset_size, mask_prob)))
+    fn sample(&self, py: Python<'_>, dataset_size: usize, mask_prob: f64) -> DatasetWrapper {
+        py.allow_threads(|| DatasetWrapper(self.0.sample(dataset_size, mask_prob)))
     }
 
-    fn infer_masked(&self, py: Python<'_>, dataset: &DatasetWrapper) -> InferredMaskedBatch {
+    fn infer(&self, py: Python<'_>, dataset: &DatasetWrapper) -> InferredMaskedBatch {
         InferredMaskedBatch {
-            data: py.allow_threads(|| self.0.infer_masked(&dataset.0)),
+            data: py.allow_threads(|| self.0.infer(&dataset.0)),
         }
     }
 
@@ -215,8 +215,8 @@ impl PPCAModelWrapper {
         py.allow_threads(|| DatasetWrapper(self.0.extrapolate(&dataset.0)))
     }
 
-    fn iterate_masked(&self, py: Python<'_>, dataset: &DatasetWrapper) -> PPCAModelWrapper {
-        py.allow_threads(|| PPCAModelWrapper(self.0.iterate_masked(&dataset.0)))
+    fn iterate(&self, py: Python<'_>, dataset: &DatasetWrapper) -> PPCAModelWrapper {
+        py.allow_threads(|| PPCAModelWrapper(self.0.iterate(&dataset.0)))
     }
 
     fn to_canonical(&self, py: Python<'_>) -> PPCAModelWrapper {

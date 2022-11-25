@@ -10,6 +10,8 @@ description = "Python+Rust implementation of the Probabilistic Principal Compone
 readme = "readme.md"
 classifiers = [
     "Programming Language :: Rust",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]

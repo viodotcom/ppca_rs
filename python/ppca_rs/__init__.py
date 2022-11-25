@@ -3,7 +3,7 @@ from __future__ import annotations
 from .ppca_rs import *
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 

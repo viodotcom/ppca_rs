@@ -172,7 +172,7 @@ impl PPCAModel {
         1 + self.state_size() * self.output_size() + self.mean.nrows()
     }
 
-    pub fn llk_masked(&self, dataset: &Dataset) -> f64 {
+    pub fn llk(&self, dataset: &Dataset) -> f64 {
         dataset
             .data
             .par_iter()
@@ -188,7 +188,7 @@ impl PPCAModel {
             .sum()
     }
 
-    pub fn sample_masked(&self, dataset_size: usize, mask_prob: f64) -> Dataset {
+    pub fn sample(&self, dataset_size: usize, mask_prob: f64) -> Dataset {
         (0..dataset_size)
             .into_par_iter()
             .map(|_| {
@@ -214,7 +214,7 @@ impl PPCAModel {
             .into()
     }
 
-    pub fn infer_masked(&self, dataset: &Dataset) -> Vec<InferredMasked> {
+    pub fn infer(&self, dataset: &Dataset) -> Vec<InferredMasked> {
         dataset
             .data
             .par_iter()
@@ -235,7 +235,7 @@ impl PPCAModel {
     }
 
     pub fn filter_extrapolate(&self, dataset: &Dataset) -> Dataset {
-        self.infer_masked(dataset)
+        self.infer(dataset)
             .into_par_iter()
             .map(|inferred| &*self.output_covariance.transform * inferred.state())
             .map(MaskedSample::unmasked)
@@ -244,7 +244,7 @@ impl PPCAModel {
     }
 
     pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
-        self.infer_masked(dataset)
+        self.infer(dataset)
             .into_par_iter()
             .zip(&dataset.data)
             .map(|(inferred, sample)| {
@@ -255,8 +255,8 @@ impl PPCAModel {
             .into()
     }
 
-    pub fn iterate_masked(&self, dataset: &Dataset) -> PPCAModel {
-        let inferred = self.infer_masked(dataset);
+    pub fn iterate(&self, dataset: &Dataset) -> PPCAModel {
+        let inferred = self.infer(dataset);
 
         // Updated transform:
         let total_cross_moment = dataset
@@ -436,9 +436,9 @@ mod test {
     }
 
     #[test]
-    fn test_llk_masked() {
+    fn test_llk() {
         let model = toy_model();
-        dbg!(model.llk_masked(&Dataset::new(vec![MaskedSample {
+        dbg!(model.llk(&Dataset::new(vec![MaskedSample {
             data: dvector![1.0, 2.0, 3.0],
             mask: Mask(BitVec::from_elem(3, true)),
         }])));

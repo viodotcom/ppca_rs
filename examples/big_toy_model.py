@@ -11,7 +11,7 @@ real_model = PPCAModel(
 )
 
 print("Generating syntetic sample")
-sample = real_model.sample_masked(100_000, 0.2)
+sample = real_model.sample(100_000, 0.2)
 
 print("Initializing model")
 model = PPCAModel.init(16, sample)
@@ -19,8 +19,8 @@ model = PPCAModel.init(16, sample)
 print("Starting iterations...")
 
 for it in range(24):
-    print(f"At iteration {it + 1} PPCA llk is {model.llk_masked(sample) / len(sample)}")
-    model = model.iterate_masked(sample)
+    print(f"At iteration {it + 1} PPCA llk is {model.llk(sample) / len(sample)}")
+    model = model.iterate(sample)
     print("Done creating iterated model")
 
 print("Model trained")
