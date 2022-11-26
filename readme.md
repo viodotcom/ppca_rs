@@ -1,12 +1,12 @@
-# _Probabilistic_ Principal Component Analysis model
+# _Probabilistic_ Principal Component Analysis (PPCA) model
 
 This project implements a PPCA model implemented in Rust for Python using `pyO3` and `maturin`.
 
 ## Installing
 
-PyPI package comming soon:
+This package is available in PyPI!
 ```bash
-pip install ppca_rs # hopefully!
+pip install ppca-rs
 ```
 
 
@@ -26,13 +26,17 @@ dataset = Dataset(samples)
 model: PPCAModel = PPCATrainer(dataset).train(state_size=10, n_iters=10)
 
 
-# And now, let's have fun!
+# And now, here is a free sampl of what you can do:
 
 # Extrapolates the missing values with the most probable values:
-model.extrapolate(dataset)
+extrapolated: Dataset = model.extrapolate(dataset)
 
 # Smooths (removes noise from) samples and fills in missing values:
-model.filter_extrapolate(dataset)
+extrapolated: Dataset = model.filter_extrapolate(dataset)
+
+# ... go back to numpy:
+eextrapolated_np = extrapolated.numpy()
+
 ```
 
 ## Building from soure
@@ -54,7 +58,7 @@ make install    # optional: i=python.version (e.g, `i=3.9`)
 
 ### Messing around and testing
 
-To mess around, _inside a virtual environment_ (a `Pipfile ` is provided for the `pipenv` lovers), do
+To mess around, _inside a virtual environment_ (a `Pipfile` is provided for the `pipenv` lovers), do
 ```bash
 maturin develop  # use the flag --release to unlock superspeed!
 ```

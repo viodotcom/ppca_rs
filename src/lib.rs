@@ -26,17 +26,17 @@ mod test {
     #[test]
     fn test_toy_model() {
         let real_model = toy_model();
-        let sample = real_model.sample_masked(1_000, 0.2);
+        let sample = real_model.sample(1_000, 0.2);
         let mut model = PPCAModel::init(2, &sample);
 
         for iter in 0..1600 {
             println!(
                 "At iteration {} model aic is {}",
                 iter + 1,
-                2.0 * (model.n_parameters() as f64 - model.llk_masked(&sample))
+                2.0 * (model.n_parameters() as f64 - model.llk(&sample))
                     / sample.len() as f64
             );
-            model = model.iterate_masked(&sample);
+            model = model.iterate(&sample);
         }
 
         dbg!(model);
@@ -62,17 +62,17 @@ mod test {
     #[test]
     fn test_big_toy_model() {
         let real_model = big_toy_model();
-        let sample = real_model.sample_masked(100_000, 0.2);
+        let sample = real_model.sample(100_000, 0.2);
         let mut model = PPCAModel::init(16, &sample);
 
         for iter in 0..24 {
             println!(
                 "At iteration {} model aic is {}",
                 iter + 1,
-                2.0 * (model.n_parameters() as f64 - model.llk_masked(&sample))
+                2.0 * (model.n_parameters() as f64 - model.llk(&sample))
                     / sample.len() as f64
             );
-            model = model.iterate_masked(&sample);
+            model = model.iterate(&sample);
         }
 
         model.to_canonical();

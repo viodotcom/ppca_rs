@@ -16,7 +16,8 @@ install: build ## Builds and installs the wheel in the local environment.
 	pip${v} install --force-reinstall --no-deps ./target/wheels/*.whl
 
 publish:
-	python${v} -m maturin publish \
+	docker run --rm -v $(shell pwd):/io ghcr.io/pyo3/maturin publish \
 		--compatibility manylinux2014 \
-		--target x86_64-unknown-linux-musl \
-		--interpreter ${v}
+		--interpreter ${v} \
+		--username ${user} \
+		--password ${password}
