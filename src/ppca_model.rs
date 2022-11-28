@@ -237,7 +237,7 @@ impl PPCAModel {
     pub fn filter_extrapolate(&self, dataset: &Dataset) -> Dataset {
         self.infer(dataset)
             .into_par_iter()
-            .map(|inferred| &*self.output_covariance.transform * inferred.state())
+            .map(|inferred| &*self.output_covariance.transform * inferred.state() + &self.mean)
             .map(MaskedSample::unmasked)
             .collect::<Vec<_>>()
             .into()
@@ -248,7 +248,7 @@ impl PPCAModel {
             .into_par_iter()
             .zip(&dataset.data)
             .map(|(inferred, sample)| {
-                let filtered = &*self.output_covariance.transform * inferred.state();
+                let filtered = &*self.output_covariance.transform * inferred.state() + &self.mean;
                 MaskedSample::unmasked(sample.mask.choose(&sample.data_vector(), &filtered))
             })
             .collect::<Vec<_>>()
