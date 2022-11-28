@@ -43,6 +43,7 @@ impl DatasetWrapper {
                         .collect::<BitVec>();
                     MaskedSample::new(data, Mask(mask))
                 })
+                .collect()
                 
         });
 
