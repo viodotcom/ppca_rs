@@ -34,6 +34,7 @@ impl DatasetWrapper {
 
         let data = py.allow_threads(|| {
             (0..n_samples)
+                .collect::<Vec<_>>() // Have to do this dumb stuff to preserve ordering.
                 .into_par_iter()
                 .map(|sample_id| {
                     let data = iter_sample(sample_id).collect::<Vec<_>>().into();
@@ -42,7 +43,7 @@ impl DatasetWrapper {
                         .collect::<BitVec>();
                     MaskedSample::new(data, Mask(mask))
                 })
-                .collect()
+                
         });
 
         Ok(DatasetWrapper(Dataset::new(data)))
