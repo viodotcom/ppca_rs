@@ -39,7 +39,7 @@ class PPCATrainer:
 
         for idx in range(n_iters):
             if not quiet:
-                llk = model.llk_masked(self.dataset)
+                llk = model.llk(self.dataset)
                 metrics = TrainMetrics(
                     llk_per_sample=llk / len(self.dataset),
                     aic=2.0 * (model.n_parameters - llk) / len(self.dataset),
@@ -48,6 +48,6 @@ class PPCATrainer:
                 )
                 print(f"Masked PPCA iteration {idx + 1}: aic={metrics.aic}")
 
-            model = model.iterate_masked(self.dataset)
+            model = model.iterate(self.dataset)
 
         return model.to_canonical()
