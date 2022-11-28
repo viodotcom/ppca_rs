@@ -52,7 +52,6 @@ impl DatasetWrapper {
             self.0
                 .data
                 .iter()
-                .par_bridge()
                 .map(MaskedSample::masked_vector)
                 .collect::<Vec<_>>()
         });
