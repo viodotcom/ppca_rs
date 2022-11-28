@@ -1,5 +1,7 @@
 # _Probabilistic_ Principal Component Analysis (PPCA) model
 
+[![PyPI version](https://badge.fury.io/py/ppca-rs.svg)](https://badge.fury.io/py/ppca-rs)
+
 This project implements a PPCA model implemented in Rust for Python using `pyO3` and `maturin`.
 
 ## Installing
@@ -22,11 +24,11 @@ samples: np.ndarray
 # Use non-finite values (`inf`s and `nan`) to signal masked values
 dataset = Dataset(samples)
 
-# Train the model:
+# Train the model (convenient edition!):
 model: PPCAModel = PPCATrainer(dataset).train(state_size=10, n_iters=10)
 
 
-# And now, here is a free sampl of what you can do:
+# And now, here is a free sample of what you can do:
 
 # Extrapolates the missing values with the most probable values:
 extrapolated: Dataset = model.extrapolate(dataset)
