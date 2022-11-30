@@ -14,4 +14,7 @@ for it in range(100):
     print(f"At iteration {it + 1} PPCA llk is {model.llk(sample)}")
     model: PPCAModel = model.iterate(sample)
 
+model = model.to_canonical()
+
 print(model)
+print(model.singular_values)

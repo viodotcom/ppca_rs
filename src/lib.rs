@@ -33,8 +33,7 @@ mod test {
             println!(
                 "At iteration {} model aic is {}",
                 iter + 1,
-                2.0 * (model.n_parameters() as f64 - model.llk(&sample))
-                    / sample.len() as f64
+                2.0 * (model.n_parameters() as f64 - model.llk(&sample)) / sample.len() as f64
             );
             model = model.iterate(&sample);
         }
@@ -69,8 +68,7 @@ mod test {
             println!(
                 "At iteration {} model aic is {}",
                 iter + 1,
-                2.0 * (model.n_parameters() as f64 - model.llk(&sample))
-                    / sample.len() as f64
+                2.0 * (model.n_parameters() as f64 - model.llk(&sample)) / sample.len() as f64
             );
             model = model.iterate(&sample);
         }

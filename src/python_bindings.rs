@@ -150,6 +150,16 @@ impl PPCAModelWrapper {
     }
 
     #[getter]
+    fn singular_values(&self, py: Python<'_>) -> Py<PyArray1<f64>> {
+        self.0
+            .singular_values()
+            .to_pyarray(py)
+            .reshape((self.0.state_size(),))
+            .expect("resizing is valid")
+            .to_owned()
+    }
+
+    #[getter]
     fn transform(&self, py: Python<'_>) -> Py<PyArray2<f64>> {
         self.0
             .output_covariance()

@@ -69,6 +69,11 @@ class PPCAModel:
     """The standard deviation of the noise in the output space."""
     mean: np.ndarray
     """Then center of mass of the distribution in the output space."""
+    singular_values: np.ndarray
+    """
+    The relative strength of each hidden variable on the output. This is equivalent to the
+    eigenvalues in the standard PCA.
+    """
     output_size: int
     """The number of features for this model."""
     state_size: int

@@ -4,6 +4,24 @@
 
 This project implements a PPCA model implemented in Rust for Python using `pyO3` and `maturin`.
 
+## Why use PPCA?
+
+Glad you asked!
+
+* The PPCA is a simples extension of the PCA (principal component analysis), but can be overall more robust to train.
+* The PPCA is a _proper statistical model_. It doesn't spit out only the mean. You get standard deviations, covariances, and all the goodies that come from thre realm of probability and statistics.
+* The PPCA model can handle _missing values_. If there is data missing from your dataset, it can extrapolate it with reasonable values and even give you a confidence interval.
+* The training converges quickly and will always tend to a global maxima. No metaparameters to dabble with and no local maxima.
+
+## Why use `ppca-rs`?
+
+That's an easy one!
+
+* It's written in Rust, with only a bit of Python glue on top. You can expect a performance in the same leage as of C code.
+* It uses `rayon` to paralellize computations evenly across as many CPUs as you have.
+* It also uses fancy Linear Algebra Trickery Technology to reduce computational complexity in key bottlenecks. 
+* Battle-tested at FindHotel with some ridiculously huge datasets.
+
 ## Installing
 
 This package is available in PyPI!

@@ -172,6 +172,15 @@ impl PPCAModel {
         1 + self.state_size() * self.output_size() + self.mean.nrows()
     }
 
+    pub fn singular_values(&self) -> DVector<f64> {
+        self.output_covariance
+            .transform
+            .column_iter()
+            .map(|column| column.norm().sqrt())
+            .collect::<Vec<_>>()
+            .into()
+    }
+
     pub fn llk(&self, dataset: &Dataset) -> f64 {
         dataset
             .data
@@ -385,8 +394,65 @@ impl InferredMasked {
         &self.state
     }
 
-    pub fn covariace(&self) -> &DVector<f64> {
-        &self.state
+    pub fn covariance(&self) -> &DMatrix<f64> {
+        &self.covariance
+    }
+
+    pub fn output(&self, ppca: &PPCAModel) -> DVector<f64> {
+        &*ppca.output_covariance.transform * self.state() + &ppca.mean
+    }
+
+    /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
+    /// save your life.
+    pub fn output_covariance(&self, ppca: &PPCAModel) -> DMatrix<f64> {
+        &*ppca.output_covariance.transform
+            * self.covariance
+            * ppca.output_covariance.transform.transpose()
+    }
+
+    /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
+    ///
+    /// This is a trick from variational inference: we are approximating the huge and
+    /// ugly output multivariate normal by a set of independent univariate normals. The
+    /// trick is to use the _precisions_ of each dimension as the precision of the
+    /// univariate normal. This minimizes the Kullback-Leibler divergence as per the
+    /// variational framework.
+    pub fn output_covariance_diagonal(&self, ppca: &PPCAModel) -> DVector<f64> {
+        // Remember Woodbury's identity? Here it is again!
+        // We wan't the precision matrix of the output, i.e., `sigma^2 I + C Sxx C^T`. This is equal to...
+        // (sigma^2 I + C Sxx C^T)^-1
+        //     = I/sigma^2 - I/sigma^2 * C * ( Sxx^-1 + C^T * C/sigma^2 )^-1 * C^T * I/sigma^2
+        //     = I/sigma^2 - C * ( Sxx^-1 * sigma^2 + C^T * C )^-1 * C^T/sigma^2
+        // ... buuuuut we just want the diagonal elements of this huge mess.
+
+        // The `( Sxx^-1 * sigma^2 + C^T * C )^-1` part...
+        let inner_inverse = (self
+            .covariance()
+            .try_inverse()
+            .expect("covariance should be always invertible")
+            * ppca.output_covariance.isotropic_noise.powi(2)
+            + ppca.output_covariance.transform.transpose() * &*ppca.output_covariance.transform)
+            .try_inverse()
+            .expect("inner matrix is always invertible");
+
+        // The `inner_inverse` part.
+        let transformed_inner_inverse = &*ppca.output_covariance.transform * inner_inverse;
+
+        // Now comes the trick! Calculate only the diagonal elements of the
+        // `transformed_inner_inverse * C^T` part.
+        let middle_mess_diagonal = transformed_inner_inverse
+            .row_iter()
+            .zip(ppca.output_covariance.transform.row_iter())
+            .map(|(row_left, row_right)| row_left.dot(&row_right));
+
+        // Finally, it's time for the easy part: to put everything together!
+        middle_mess_diagonal
+            .map(|thing| {
+                let precision = (1.0 - thing) / ppca.output_covariance.isotropic_noise.powi(2);
+                1.0 / precision
+            })
+            .collect::<Vec<_>>()
+            .into()
     }
 }
 
