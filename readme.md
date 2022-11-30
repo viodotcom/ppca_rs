@@ -4,6 +4,13 @@
 
 This project implements a PPCA model implemented in Rust for Python using `pyO3` and `maturin`.
 
+## Installing
+
+This package is available in PyPI!
+```bash
+pip install ppca-rs
+```
+
 ## Why use PPCA?
 
 Glad you asked!
@@ -21,13 +28,6 @@ That's an easy one!
 * It uses `rayon` to paralellize computations evenly across as many CPUs as you have.
 * It also uses fancy Linear Algebra Trickery Technology to reduce computational complexity in key bottlenecks. 
 * Battle-tested at FindHotel with some ridiculously huge datasets.
-
-## Installing
-
-This package is available in PyPI!
-```bash
-pip install ppca-rs
-```
 
 
 ## Quick example
