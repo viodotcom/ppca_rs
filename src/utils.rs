@@ -78,33 +78,37 @@ impl Mask {
         expanded
     }
 
-    // pub(crate) fn expand_matrix(&self, matrix: DMatrix<f64>) -> DMatrix<f64> {
-    //     assert!(matrix.is_square(), "cannot expand rectangular matrices");
-    //     let ncols = matrix.ncols();
-    //     let mut it = matrix.row_iter();
-    //     let expanded = DMatrix::from_row_iterator(
-    //         self.0.len(),
-    //         self.0.len(),
-    //         self.0.iter().map(|selected| {
-    //             if selected {
-    //                 self.expand(
-    //                     it.next()
-    //                         .expect("input matrix too short in row size for mask"),
-    //                 )
-    //                 .clone()
-    //             } else {
-    //                 DVector::zeros(ncols)
-    //             }
-    //         }),
-    //     );
+    pub(crate) fn expand_matrix(&self, matrix: DMatrix<f64>) -> DMatrix<f64> {
+        assert!(matrix.is_square(), "cannot expand rectangular matrices");
+        let ncols = matrix.ncols();
+        let mut it = matrix.row_iter();
 
-    //     assert!(
-    //         it.next().is_none(),
-    //         "input matrix has more entries than mask"
-    //     );
+        let expanded_rows = self
+            .0
+            .iter()
+            .map(|selected| {
+                if selected {
+                    self.expand(
+                        &it.next()
+                            .expect("input matrix too short in row size for mask")
+                            .transpose(),
+                    )
+                    .clone()
+                } else {
+                    DVector::zeros(ncols)
+                }
+            })
+            .map(|row_in_column_form| row_in_column_form.transpose())
+            .collect::<Vec<_>>();
+        let expanded = DMatrix::from_rows(&expanded_rows);
 
-    //     expanded
-    // }
+        assert!(
+            it.next().is_none(),
+            "input matrix has more entries than mask"
+        );
+
+        expanded
+    }
 
     pub(crate) fn fillna(&self, vector: &DVector<f64>) -> DVector<f64> {
         vector

@@ -119,13 +119,19 @@ impl InferredMaskedBatch {
         DatasetWrapper(outputs)
     }
 
-    fn output_covariances(&self, py: Python, ppca: &PPCAModelWrapper) -> Vec<Py<PyArray2<f64>>> {
+    fn output_covariances(
+        &self,
+        py: Python,
+        ppca: &PPCAModelWrapper,
+        dataset: &DatasetWrapper,
+    ) -> Vec<Py<PyArray2<f64>>> {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
-            .map(|inferred| {
+            .zip(&dataset.0.data)
+            .map(|(inferred, sample)| {
                 inferred
-                    .output_covariance(&ppca.0)
+                    .output_covariance(&ppca.0, sample)
                     .to_pyarray(py)
                     .to_owned()
             })

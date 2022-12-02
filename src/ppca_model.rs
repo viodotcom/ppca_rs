@@ -404,32 +404,33 @@ impl InferredMasked {
 
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
-    pub fn output_covariance(&self, ppca: &PPCAModel) -> DMatrix<f64> {
-        DMatrix::identity(ppca.output_size(), ppca.output_size())
-            * ppca.output_covariance.isotropic_noise.powi(2)
-            + &*ppca.output_covariance.transform
-                * &self.covariance
-                * ppca.output_covariance.transform.transpose()
+    pub fn output_covariance(&self, ppca: &PPCAModel, sample: &MaskedSample) -> DMatrix<f64> {
+        let negative = sample.mask().negate();
+
+        if !negative.0.any() {
+            return DMatrix::zeros(ppca.output_size(), ppca.output_size());
+        }
+
+        let sub_covariance = ppca.output_covariance.masked(&negative);
+
+        let output_covariance =
+            DMatrix::identity(sub_covariance.output_size(), sub_covariance.output_size())
+                * sub_covariance.isotropic_noise.powi(2)
+                + &*sub_covariance.transform
+                    * &self.covariance
+                    * sub_covariance.transform.transpose();
+
+        negative.expand_matrix(output_covariance)
     }
 
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
-    ///
-    /// This is a trick from variational inference: we are approximating the huge and
-    /// ugly output multivariate normal by a set of independent univariate normals. The
-    /// trick is to use the _precisions_ of each dimension as the precision of the
-    /// univariate normal. This minimizes the Kullback-Leibler divergence as per the
-    /// variational framework.
     pub fn output_covariance_diagonal(
         &self,
         ppca: &PPCAModel,
         sample: &MaskedSample,
     ) -> DVector<f64> {
-        // Remember Woodbury's identity? Here it is again!
-        // We wan't the precision matrix of the output, i.e., `sigma^2 I + C Sxx C^T`. This is equal to...
-        // (sigma^2 I + C Sxx C^T)^-1
-        //     = I/sigma^2 - I/sigma^2 * C * ( Sxx^-1 + C^T * C/sigma^2 )^-1 * C^T * I/sigma^2
-        //     = I/sigma^2 - C * ( Sxx^-1 * sigma^2 + C^T * C )^-1 * C^T/sigma^2
-        // ... buuuuut we just want the diagonal elements of this huge mess.
+        // Here, we will calculate `I sigma^2 + C Sxx C^T` for the unobserved samples in a
+        // clever way...
 
         let negative = sample.mask().negate();
 
@@ -439,32 +440,20 @@ impl InferredMasked {
 
         let sub_covariance = ppca.output_covariance.masked(&negative);
 
-        // The `( Sxx^-1 * sigma^2 + C^T * C )^-1` part...
-        let inner_inverse = (self
-            .covariance()
-            .clone()
-            .try_inverse()
-            .expect("covariance should be always invertible")
-            * sub_covariance.isotropic_noise.powi(2)
-            + sub_covariance.transform.transpose() * &*sub_covariance.transform)
-            .try_inverse()
-            .expect("inner matrix is always invertible");
-
         // The `inner_inverse` part.
-        let transformed_inner_inverse = &*sub_covariance.transform * inner_inverse;
+        let transformed_state_covariance = &*sub_covariance.transform * &self.covariance;
 
         // Now comes the trick! Calculate only the diagonal elements of the
-        // `transformed_inner_inverse * C^T` part.
-        let middle_mess_diagonal = transformed_inner_inverse
+        // `transformed_state_covariance * C^T` part.
+        let noiseless_output_diagonal = transformed_state_covariance
             .row_iter()
             .zip(sub_covariance.transform.row_iter())
             .map(|(row_left, row_right)| row_left.dot(&row_right));
 
-        // Finally, it's time for the easy part: to put everything together!
-        let diagonal_reduced = middle_mess_diagonal
-            .map(|thing| {
-                let precision = (1.0 - thing) / sub_covariance.isotropic_noise.powi(2);
-                1.0 / precision
+        // Finally, add the isotropic noise term...
+        let diagonal_reduced = noiseless_output_diagonal
+            .map(|noiseless_output_variance| {
+                noiseless_output_variance + sub_covariance.isotropic_noise.powi(2)
             })
             .collect::<Vec<_>>()
             .into();
