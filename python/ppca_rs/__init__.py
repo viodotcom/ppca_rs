@@ -7,6 +7,7 @@ from typing import List, Optional
 
 import numpy as np
 
+
 @dataclass(frozen=True)
 class TrainMetrics:
     llk_per_sample: float

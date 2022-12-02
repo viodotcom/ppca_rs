@@ -18,3 +18,6 @@ model = model.to_canonical()
 
 print(model)
 print(model.singular_values)
+
+inferred = model.infer(sample)
+print(inferred.output_covariances_diagonal(model, sample).numpy() ** 0.5)

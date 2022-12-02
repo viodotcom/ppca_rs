@@ -102,8 +102,53 @@ impl InferredMaskedBatch {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
-            .map(|inferred| inferred.covariace().to_pyarray(py).to_owned())
+            .map(|inferred| inferred.covariance().to_pyarray(py).to_owned())
             .collect()
+    }
+
+    fn outputs(&self, py: Python, ppca: &PPCAModelWrapper) -> DatasetWrapper {
+        let outputs: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .map(|inferred| inferred.output(&ppca.0))
+                .map(MaskedSample::unmasked)
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(outputs)
+    }
+
+    fn output_covariances(&self, py: Python, ppca: &PPCAModelWrapper) -> Vec<Py<PyArray2<f64>>> {
+        // No par iter for you because Python is not Sync.
+        self.data
+            .iter()
+            .map(|inferred| {
+                inferred
+                    .output_covariance(&ppca.0)
+                    .to_pyarray(py)
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    fn output_covariances_diagonal(
+        &self,
+        py: Python,
+        ppca: &PPCAModelWrapper,
+        dataset: &DatasetWrapper,
+    ) -> DatasetWrapper {
+        let output_covariances_diagonal: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .zip(&dataset.0.data)
+                .map(|(inferred, sample)| inferred.output_covariance_diagonal(&ppca.0, sample))
+                .map(MaskedSample::unmasked)
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(output_covariances_diagonal)
     }
 }
 

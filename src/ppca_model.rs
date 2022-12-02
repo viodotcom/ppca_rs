@@ -246,7 +246,7 @@ impl PPCAModel {
     pub fn filter_extrapolate(&self, dataset: &Dataset) -> Dataset {
         self.infer(dataset)
             .into_par_iter()
-            .map(|inferred| &*self.output_covariance.transform * inferred.state() + &self.mean)
+            .map(|inferred| inferred.output(&self))
             .map(MaskedSample::unmasked)
             .collect::<Vec<_>>()
             .into()
@@ -257,7 +257,7 @@ impl PPCAModel {
             .into_par_iter()
             .zip(&dataset.data)
             .map(|(inferred, sample)| {
-                let filtered = &*self.output_covariance.transform * inferred.state() + &self.mean;
+                let filtered = inferred.output(&self);
                 MaskedSample::unmasked(sample.mask.choose(&sample.data_vector(), &filtered))
             })
             .collect::<Vec<_>>()
@@ -405,9 +405,11 @@ impl InferredMasked {
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn output_covariance(&self, ppca: &PPCAModel) -> DMatrix<f64> {
-        &*ppca.output_covariance.transform
-            * self.covariance
-            * ppca.output_covariance.transform.transpose()
+        DMatrix::identity(ppca.output_size(), ppca.output_size())
+            * ppca.output_covariance.isotropic_noise.powi(2)
+            + &*ppca.output_covariance.transform
+                * &self.covariance
+                * ppca.output_covariance.transform.transpose()
     }
 
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
@@ -417,7 +419,11 @@ impl InferredMasked {
     /// trick is to use the _precisions_ of each dimension as the precision of the
     /// univariate normal. This minimizes the Kullback-Leibler divergence as per the
     /// variational framework.
-    pub fn output_covariance_diagonal(&self, ppca: &PPCAModel) -> DVector<f64> {
+    pub fn output_covariance_diagonal(
+        &self,
+        ppca: &PPCAModel,
+        sample: &MaskedSample,
+    ) -> DVector<f64> {
         // Remember Woodbury's identity? Here it is again!
         // We wan't the precision matrix of the output, i.e., `sigma^2 I + C Sxx C^T`. This is equal to...
         // (sigma^2 I + C Sxx C^T)^-1
@@ -425,34 +431,45 @@ impl InferredMasked {
         //     = I/sigma^2 - C * ( Sxx^-1 * sigma^2 + C^T * C )^-1 * C^T/sigma^2
         // ... buuuuut we just want the diagonal elements of this huge mess.
 
+        let negative = sample.mask().negate();
+
+        if !negative.0.any() {
+            return DVector::zeros(ppca.output_size());
+        }
+
+        let sub_covariance = ppca.output_covariance.masked(&negative);
+
         // The `( Sxx^-1 * sigma^2 + C^T * C )^-1` part...
         let inner_inverse = (self
             .covariance()
+            .clone()
             .try_inverse()
             .expect("covariance should be always invertible")
-            * ppca.output_covariance.isotropic_noise.powi(2)
-            + ppca.output_covariance.transform.transpose() * &*ppca.output_covariance.transform)
+            * sub_covariance.isotropic_noise.powi(2)
+            + sub_covariance.transform.transpose() * &*sub_covariance.transform)
             .try_inverse()
             .expect("inner matrix is always invertible");
 
         // The `inner_inverse` part.
-        let transformed_inner_inverse = &*ppca.output_covariance.transform * inner_inverse;
+        let transformed_inner_inverse = &*sub_covariance.transform * inner_inverse;
 
         // Now comes the trick! Calculate only the diagonal elements of the
         // `transformed_inner_inverse * C^T` part.
         let middle_mess_diagonal = transformed_inner_inverse
             .row_iter()
-            .zip(ppca.output_covariance.transform.row_iter())
+            .zip(sub_covariance.transform.row_iter())
             .map(|(row_left, row_right)| row_left.dot(&row_right));
 
         // Finally, it's time for the easy part: to put everything together!
-        middle_mess_diagonal
+        let diagonal_reduced = middle_mess_diagonal
             .map(|thing| {
-                let precision = (1.0 - thing) / ppca.output_covariance.isotropic_noise.powi(2);
+                let precision = (1.0 - thing) / sub_covariance.isotropic_noise.powi(2);
                 1.0 / precision
             })
             .collect::<Vec<_>>()
-            .into()
+            .into();
+
+        negative.expand(&diagonal_reduced)
     }
 }
 

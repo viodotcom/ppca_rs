@@ -41,6 +41,24 @@ class InferredMasked:
         sample to sample, depending on the mask. If there is lots of masking in a sample,
         the covariance will be overall bigger.
         """
+    def output_covariances_diagonal(
+        self, model: PPCAModel, dataset: Dataset
+    ) -> Dataset:
+        """
+        Returns an _approximation_ of the output covariance matrix, treating each masked
+        output as an independent normal distribution.
+
+        # Note
+
+        Use this not to get lost with big matrices in the output, losing CPU, memory and
+        hair.
+
+        This is a trick from variational inference: we are approximating the huge and
+        ugly output multivariate normal by a set of independent univariate normals. The
+        trick is to use the _precisions_ of each dimension as the precision of the
+        univariate normal. This minimizes the Kullback-Leibler divergence as per the
+        variational framework.
+        """
 
 class PPCAModel:
     """

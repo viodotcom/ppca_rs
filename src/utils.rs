@@ -31,6 +31,12 @@ impl Mask {
         Mask(BitVec::from_elem(size, true))
     }
 
+    pub(crate) fn negate(&self) -> Mask {
+        let mut neg = self.0.clone();
+        neg.negate();
+        Mask(neg)
+    }
+
     pub(crate) fn filter<'a, I: IntoIterator>(&'a self, it: I) -> impl 'a + Iterator<Item = I::Item>
     where
         I::IntoIter: 'a,
@@ -48,6 +54,57 @@ impl Mask {
             .collect::<Vec<_>>()
             .into()
     }
+
+    pub(crate) fn expand(&self, vector: &DVector<f64>) -> DVector<f64> {
+        let mut it = vector.iter();
+        let expanded = self
+            .0
+            .iter()
+            .map(|selected| {
+                if selected {
+                    *it.next().expect("input vector too short for mask")
+                } else {
+                    0.0
+                }
+            })
+            .collect::<Vec<_>>()
+            .into();
+
+        assert!(
+            it.next().is_none(),
+            "input vector has more entries than mask"
+        );
+
+        expanded
+    }
+
+    // pub(crate) fn expand_matrix(&self, matrix: DMatrix<f64>) -> DMatrix<f64> {
+    //     assert!(matrix.is_square(), "cannot expand rectangular matrices");
+    //     let ncols = matrix.ncols();
+    //     let mut it = matrix.row_iter();
+    //     let expanded = DMatrix::from_row_iterator(
+    //         self.0.len(),
+    //         self.0.len(),
+    //         self.0.iter().map(|selected| {
+    //             if selected {
+    //                 self.expand(
+    //                     it.next()
+    //                         .expect("input matrix too short in row size for mask"),
+    //                 )
+    //                 .clone()
+    //             } else {
+    //                 DVector::zeros(ncols)
+    //             }
+    //         }),
+    //     );
+
+    //     assert!(
+    //         it.next().is_none(),
+    //         "input matrix has more entries than mask"
+    //     );
+
+    //     expanded
+    // }
 
     pub(crate) fn fillna(&self, vector: &DVector<f64>) -> DVector<f64> {
         vector
