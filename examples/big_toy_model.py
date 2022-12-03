@@ -4,8 +4,9 @@ from ppca_rs import PPCAModel
 print("Generating model")
 
 transform = np.random.binomial(1.0, 0.1, size=(200, 16))
+print(np.array(transform, dtype="float64"))
 real_model = PPCAModel(
-    transform=transform.astype("float64"),
+    transform=np.array(transform, dtype="float64"),
     isotropic_noise=0.1,
     mean=np.zeros((200, 1), dtype="float64"),
 )

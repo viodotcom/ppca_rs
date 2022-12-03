@@ -5,7 +5,7 @@ from ppca_rs import PPCAModel
 real_model = PPCAModel(
     transform=np.matrix([[1, 1, 0], [1, 0, 1]], dtype="float64").T,
     isotropic_noise=0.1,
-    mean=np.array([0, 1, 0], dtype="float64"),
+    mean=np.array([[0, 1, 0]], dtype="float64").T,
 )
 sample = real_model.sample(100, mask_prob=0.2)
 model = PPCAModel.init(2, sample)
@@ -20,4 +20,4 @@ print(model)
 print(model.singular_values)
 
 inferred = model.infer(sample)
-print(inferred.output_covariances_diagonal(model, sample).numpy() ** 0.5)
+print(inferred.smoothed_covariances_diagonal(model).numpy() ** 0.5)

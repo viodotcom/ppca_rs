@@ -106,11 +106,11 @@ impl InferredMaskedBatch {
             .collect()
     }
 
-    fn outputs(&self, py: Python, ppca: &PPCAModelWrapper) -> DatasetWrapper {
+    fn smoothed(&self, py: Python, ppca: &PPCAModelWrapper) -> DatasetWrapper {
         let outputs: Dataset = py.allow_threads(|| {
             self.data
                 .par_iter()
-                .map(|inferred| inferred.output(&ppca.0))
+                .map(|inferred| inferred.smoothed(&ppca.0))
                 .map(MaskedSample::unmasked)
                 .collect::<Vec<_>>()
                 .into()
@@ -119,7 +119,51 @@ impl InferredMaskedBatch {
         DatasetWrapper(outputs)
     }
 
-    fn output_covariances(
+    fn extrapolated(
+        &self,
+        py: Python,
+        ppca: &PPCAModelWrapper,
+        dataset: &DatasetWrapper,
+    ) -> DatasetWrapper {
+        let outputs: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .zip(&dataset.0.data)
+                .map(|(inferred, sample)| inferred.extrapolated(&ppca.0, sample))
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(outputs)
+    }
+
+    fn smoothed_covariances(&self, py: Python, ppca: &PPCAModelWrapper) -> Vec<Py<PyArray2<f64>>> {
+        // No par iter for you because Python is not Sync.
+        self.data
+            .iter()
+            .map(|inferred| {
+                inferred
+                    .smoothed_covariance(&ppca.0)
+                    .to_pyarray(py)
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    fn smoothed_covariances_diagonal(&self, py: Python, ppca: &PPCAModelWrapper) -> DatasetWrapper {
+        let output_covariances_diagonal: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .map(|inferred| inferred.smoothed_covariance_diagonal(&ppca.0))
+                .map(MaskedSample::unmasked)
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(output_covariances_diagonal)
+    }
+
+    fn extrapolated_covariances(
         &self,
         py: Python,
         ppca: &PPCAModelWrapper,
@@ -131,14 +175,14 @@ impl InferredMaskedBatch {
             .zip(&dataset.0.data)
             .map(|(inferred, sample)| {
                 inferred
-                    .output_covariance(&ppca.0, sample)
+                    .extrapolated_covariance(&ppca.0, sample)
                     .to_pyarray(py)
                     .to_owned()
             })
             .collect()
     }
 
-    fn output_covariances_diagonal(
+    fn extrapolated_covariances_diagonal(
         &self,
         py: Python,
         ppca: &PPCAModelWrapper,
@@ -148,7 +192,9 @@ impl InferredMaskedBatch {
             self.data
                 .par_iter()
                 .zip(&dataset.0.data)
-                .map(|(inferred, sample)| inferred.output_covariance_diagonal(&ppca.0, sample))
+                .map(|(inferred, sample)| {
+                    inferred.extrapolated_covariance_diagonal(&ppca.0, sample)
+                })
                 .map(MaskedSample::unmasked)
                 .collect::<Vec<_>>()
                 .into()
@@ -170,7 +216,7 @@ impl PPCAModelWrapper {
         py: Python<'_>,
         isotropic_noise: f64,
         transform: Py<PyArray2<f64>>,
-        mean: Py<PyArray1<f64>>,
+        mean: Py<PyArray2<f64>>,
     ) -> PyResult<PPCAModelWrapper> {
         Ok(PPCAModelWrapper(PPCAModel::new(
             isotropic_noise,
@@ -178,11 +224,34 @@ impl PPCAModelWrapper {
                 .as_ref(py)
                 .try_readonly()?
                 .try_as_matrix()
-                .unwrap() as DMatrixSlice<f64>)
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyException::new_err(
+                        "could not convert transformation ndarray to matrix",
+                    )
+                })? as DMatrixSlice<f64>)
                 .into_owned(),
-            (mean.as_ref(py).try_readonly()?.try_as_matrix().unwrap() as DVectorSlice<f64>)
+            (mean
+                .as_ref(py)
+                .try_readonly()?
+                .try_as_matrix()
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyException::new_err(
+                        "could not convert mean ndarray to matrix",
+                    )
+                })? as DVectorSlice<f64>)
                 .into_owned(),
         )))
+    }
+
+    #[staticmethod]
+    fn load(bytes: &[u8]) -> PyResult<PPCAModelWrapper> {
+        Ok(PPCAModelWrapper(bincode::deserialize(bytes).map_err(
+            |err| pyo3::exceptions::PyException::new_err(err.to_string()),
+        )?))
+    }
+
+    fn dump(&self) -> Vec<u8> {
+        bincode::serialize(&self.0).expect("can always serialize PPCA model")
     }
 
     #[getter]
@@ -266,8 +335,8 @@ impl PPCAModelWrapper {
         }
     }
 
-    fn filter_extrapolate(&self, py: Python<'_>, dataset: &DatasetWrapper) -> DatasetWrapper {
-        py.allow_threads(|| DatasetWrapper(self.0.filter_extrapolate(&dataset.0)))
+    fn smooth(&self, py: Python<'_>, dataset: &DatasetWrapper) -> DatasetWrapper {
+        py.allow_threads(|| DatasetWrapper(self.0.smooth(&dataset.0)))
     }
 
     fn extrapolate(&self, py: Python<'_>, dataset: &DatasetWrapper) -> DatasetWrapper {
@@ -285,7 +354,7 @@ impl PPCAModelWrapper {
     pub fn __setstate__(&mut self, py: Python, state: PyObject) -> PyResult<()> {
         match state.extract::<&PyBytes>(py) {
             Ok(s) => {
-                self.0 = bincode::deserialize(s.as_bytes()).unwrap();
+                self.0 = PPCAModelWrapper::load(s.as_bytes())?.0;
                 Ok(())
             }
             Err(e) => Err(e),
@@ -293,7 +362,7 @@ impl PPCAModelWrapper {
     }
 
     pub fn __getstate__(&self, py: Python) -> PyResult<PyObject> {
-        Ok(PyBytes::new(py, &bincode::serialize(&self.0).unwrap()).to_object(py))
+        Ok(PyBytes::new(py, &self.dump()).to_object(py))
     }
 
     pub fn __getnewargs__(

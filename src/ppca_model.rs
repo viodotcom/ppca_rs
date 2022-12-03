@@ -243,10 +243,10 @@ impl PPCAModel {
             .collect()
     }
 
-    pub fn filter_extrapolate(&self, dataset: &Dataset) -> Dataset {
+    pub fn smooth(&self, dataset: &Dataset) -> Dataset {
         self.infer(dataset)
             .into_par_iter()
-            .map(|inferred| inferred.output(&self))
+            .map(|inferred| inferred.smoothed(&self))
             .map(MaskedSample::unmasked)
             .collect::<Vec<_>>()
             .into()
@@ -256,10 +256,7 @@ impl PPCAModel {
         self.infer(dataset)
             .into_par_iter()
             .zip(&dataset.data)
-            .map(|(inferred, sample)| {
-                let filtered = inferred.output(&self);
-                MaskedSample::unmasked(sample.mask.choose(&sample.data_vector(), &filtered))
-            })
+            .map(|(inferred, sample)| inferred.extrapolated(self, sample))
             .collect::<Vec<_>>()
             .into()
     }
@@ -398,13 +395,54 @@ impl InferredMasked {
         &self.covariance
     }
 
-    pub fn output(&self, ppca: &PPCAModel) -> DVector<f64> {
+    pub fn smoothed(&self, ppca: &PPCAModel) -> DVector<f64> {
         &*ppca.output_covariance.transform * self.state() + &ppca.mean
+    }
+
+    pub fn extrapolated(&self, ppca: &PPCAModel, sample: &MaskedSample) -> MaskedSample {
+        let filtered = self.smoothed(&ppca);
+        MaskedSample::unmasked(sample.mask.choose(&sample.data_vector(), &filtered))
     }
 
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
-    pub fn output_covariance(&self, ppca: &PPCAModel, sample: &MaskedSample) -> DMatrix<f64> {
+    pub fn smoothed_covariance(&self, ppca: &PPCAModel) -> DMatrix<f64> {
+        let covariance = &ppca.output_covariance;
+
+        DMatrix::identity(covariance.output_size(), covariance.output_size())
+            * covariance.isotropic_noise.powi(2)
+            + &*covariance.transform * &self.covariance * covariance.transform.transpose()
+    }
+
+    /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
+    pub fn smoothed_covariance_diagonal(&self, ppca: &PPCAModel) -> DVector<f64> {
+        // Here, we will calculate `I sigma^2 + C Sxx C^T` for the unobserved samples in a
+        // clever way...
+
+        let covariance = &ppca.output_covariance;
+
+        // The `inner_inverse` part.
+        let transformed_state_covariance = &*covariance.transform * &self.covariance;
+
+        // Now comes the trick! Calculate only the diagonal elements of the
+        // `transformed_state_covariance * C^T` part.
+        let noiseless_output_diagonal = transformed_state_covariance
+            .row_iter()
+            .zip(covariance.transform.row_iter())
+            .map(|(row_left, row_right)| row_left.dot(&row_right));
+
+        // Finally, add the isotropic noise term...
+        noiseless_output_diagonal
+            .map(|noiseless_output_variance| {
+                noiseless_output_variance + covariance.isotropic_noise.powi(2)
+            })
+            .collect::<Vec<_>>()
+            .into()
+    }
+
+    /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
+    /// save your life.
+    pub fn extrapolated_covariance(&self, ppca: &PPCAModel, sample: &MaskedSample) -> DMatrix<f64> {
         let negative = sample.mask().negate();
 
         if !negative.0.any() {
@@ -424,7 +462,7 @@ impl InferredMasked {
     }
 
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
-    pub fn output_covariance_diagonal(
+    pub fn extrapolated_covariance_diagonal(
         &self,
         ppca: &PPCAModel,
         sample: &MaskedSample,

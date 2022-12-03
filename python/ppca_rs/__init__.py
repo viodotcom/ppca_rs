@@ -8,6 +8,9 @@ from typing import List, Optional
 import numpy as np
 
 
+__version__ = "0.2.0"
+
+
 @dataclass(frozen=True)
 class TrainMetrics:
     llk_per_sample: float

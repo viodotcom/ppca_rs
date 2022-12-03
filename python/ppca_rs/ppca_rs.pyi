@@ -37,15 +37,41 @@ class InferredMasked:
         """The inferred mean value for each sample."""
     def covariances(self) -> List[np.ndarray]:
         """
-        The covariance matrices for each sample.The covariances here can change from
+        The covariance matrices for each sample. The covariances here can change from
         sample to sample, depending on the mask. If there is lots of masking in a sample,
         the covariance will be overall bigger.
         """
-    def output_covariances_diagonal(
+    def smoothed(self, model: PPCAModel) -> Dataset:
+        """
+        The smoothed output values.
+        """
+    def smoothed_covariances(self, model: PPCAModel) -> Dataset:
+        """
+        The covariance for the smoothed output values.
+        """
+    def smoothed_covariances_diagonal(self, model: PPCAModel) -> Dataset:
+        """
+        Returns an _approximation_ of the smoothed output covariance matrix, treating each masked
+        output as an independent normal distribution.
+
+        # Note
+
+        Use this not to get lost with big matrices in the output, losing CPU, memory and
+        hair.
+        """
+    def extrapolated(self, model: PPCAModel, dataset: Dataset) -> Dataset:
+        """
+        The extrapolated output values.
+        """
+    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> Dataset:
+        """
+        The covariance for the extraplated values.
+        """
+    def extrapolated_covariances_diagonal(
         self, model: PPCAModel, dataset: Dataset
     ) -> Dataset:
         """
-        Returns an _approximation_ of the output covariance matrix, treating each masked
+        Returns an _approximation_ of the extrapolated output covariance matrix, treating each masked
         output as an independent normal distribution.
 
         # Note
@@ -94,6 +120,11 @@ class PPCAModel:
     """The total number of parameters involved in training (used for information criteria)."""
     transform: np.ndarray
 
+    @staticmethod
+    def load(b: bytes) -> PPCAModel:
+        """Loads a PPCA model from binary data. Use this if you want to avoid picking."""
+    def dump(self) -> bytes:
+        """Encodes the PPCA model into binary data. Use this if you want to avoid picking."""
     @classmethod
     def init(cls, n_states: int) -> PPCAModel:
         """Creates an uninformed model to seed the trainment."""
@@ -110,11 +141,14 @@ class PPCAModel:
         generated value.
         """
     def infer(self, dataset: Dataset) -> InferredMasked:
-        """Infers the hidden components for each sample in the dataset."""
-    def filter_extrapolate(self, dataset: Dataset) -> Dataset:
         """
-        Filters a dataset of samples and extrapolates the missing values with the most
-        probable values.
+        Infers the hidden components for each sample in the dataset. Use this method for
+        fine-grain control on the properties you want to extract from the model.
+        """
+    def smooth(self, dataset: Dataset) -> Dataset:
+        """
+        Filters a dataset of samples, removing noise from the extant samples and
+        inferring the missing samples.
         """
     def extrapolate(self, dataset: Dataset) -> Dataset:
         """Extrapolates the missing values with the most probable values."""
