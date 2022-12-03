@@ -51,7 +51,7 @@ impl DatasetWrapper {
         let rows = py.allow_threads(|| {
             self.0
                 .data
-                .iter()
+                .par_iter()
                 .map(MaskedSample::masked_vector)
                 .collect::<Vec<_>>()
         });
