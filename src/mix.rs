@@ -1,5 +1,7 @@
 use nalgebra::{DMatrix, DVector};
+use rand_distr::{Distribution, WeightedIndex};
 use rayon::prelude::*;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::ppca_model::{Dataset, MaskedSample, PPCAModel};
 
@@ -17,18 +19,72 @@ fn robust_log_softnorm(data: DVector<f64>) -> f64 {
     max + log_norm
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PPCAMix {
+    output_size: usize,
     models: Vec<PPCAModel>,
     log_weights: DVector<f64>,
 }
 
 impl PPCAMix {
     pub fn new(models: Vec<PPCAModel>, log_weights: DVector<f64>) -> PPCAMix {
+        assert!(models.len() > 0);
+        assert_eq!(models.len(), log_weights.len());
+
+        let output_sizes = models
+            .iter()
+            .map(PPCAModel::output_size)
+            .collect::<Vec<_>>();
+        let mut unique_sizes = output_sizes.clone();
+        unique_sizes.dedup();
+        assert_eq!(
+            unique_sizes.len(),
+            1,
+            "Model output sizes are not the same: {output_sizes:?}"
+        );
+
         PPCAMix {
+            output_size: unique_sizes[0],
             models,
             log_weights: robust_log_softmax(log_weights),
         }
+    }
+
+    pub fn output_size(&self) -> usize {
+        self.output_size
+    }
+
+    pub fn state_sizes(&self) -> Vec<usize> {
+        self.models.iter().map(PPCAModel::state_size).collect()
+    }
+
+    pub fn n_parameters(&self) -> usize {
+        self.models
+            .iter()
+            .map(PPCAModel::n_parameters)
+            .sum::<usize>()
+            + self.models.len()
+            - 1
+    }
+
+    pub fn models(&self) -> &[PPCAModel] {
+        &self.models
+    }
+
+    pub fn log_weights(&self) -> &DVector<f64> {
+        &self.log_weights
+    }
+
+    pub fn sample(&self, dataset_size: usize, mask_probability: f64) -> Dataset {
+        let index = WeightedIndex::new(self.log_weights.iter().copied().map(f64::exp))
+            .expect("can create WeigtedIndex from distribution");
+        (0..dataset_size)
+            .into_par_iter()
+            .map(|_| {
+                let model_idx = index.sample(&mut rand::thread_rng());
+                self.models[model_idx].sample_one(mask_probability)
+            })
+            .collect()
     }
 
     pub fn llks(&self, dataset: &Dataset) -> DVector<f64> {
@@ -159,6 +215,7 @@ impl PPCAMix {
             .unzip();
 
         PPCAMix {
+            output_size: self.output_size,
             models: iterated_models,
             log_weights: robust_log_softmax(log_weights.into()),
         }
@@ -166,6 +223,7 @@ impl PPCAMix {
 
     pub fn to_canonical(&self) -> PPCAMix {
         PPCAMix {
+            output_size: self.output_size,
             models: self.models.iter().map(PPCAModel::to_canonical).collect(),
             log_weights: self.log_weights.clone(),
         }

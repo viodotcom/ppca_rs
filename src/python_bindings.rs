@@ -16,6 +16,7 @@ pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PPCAModelWrapper>()?;
     m.add_class::<DatasetWrapper>()?;
     m.add_class::<InferredMaskedBatch>()?;
+    m.add_class::<PPCAMixWrapper>()?;
     Ok(())
 }
 
@@ -408,6 +409,53 @@ impl PPCAMixWrapper {
         ))
     }
 
+    #[staticmethod]
+    fn load(bytes: &[u8]) -> PyResult<PPCAMixWrapper> {
+        Ok(PPCAMixWrapper(bincode::deserialize(bytes).map_err(
+            |err| pyo3::exceptions::PyException::new_err(err.to_string()),
+        )?))
+    }
+
+    fn dump(&self) -> Vec<u8> {
+        bincode::serialize(&self.0).expect("can always serialize PPCA model")
+    }
+
+    #[getter]
+    fn output_size(&self) -> usize {
+        self.0.output_size()
+    }
+
+    #[getter]
+    fn state_sizes(&self) -> Vec<usize> {
+        self.0.state_sizes()
+    }
+
+    #[getter]
+    fn n_parameters(&self) -> usize {
+        self.0.n_parameters()
+    }
+
+    #[getter]
+    fn models(&self) -> Vec<PPCAModelWrapper> {
+        self.0
+            .models()
+            .iter()
+            .cloned()
+            .map(PPCAModelWrapper)
+            .collect()
+    }
+
+    #[getter]
+    fn log_weights(&self, py: Python) -> Py<PyArray1<f64>> {
+        self.0
+            .log_weights()
+            .clone()
+            .to_pyarray(py)
+            .reshape(self.0.log_weights().len())
+            .expect("can reshape")
+            .to_owned()
+    }
+
     pub fn llks(&self, py: Python, dataset: &DatasetWrapper) -> Py<PyArray1<f64>> {
         let llks = py.allow_threads(|| self.0.llks(&dataset.0));
         llks.to_pyarray(py)
@@ -418,6 +466,10 @@ impl PPCAMixWrapper {
 
     pub fn llk(&self, py: Python, dataset: &DatasetWrapper) -> f64 {
         py.allow_threads(|| self.0.llk(&dataset.0))
+    }
+
+    pub fn sample(&self, py: Python<'_>, dataset_size: usize, mask_probability: f64) -> DatasetWrapper {
+        DatasetWrapper(py.allow_threads(|| self.0.sample(dataset_size, mask_probability)))
     }
 
     pub fn infer_cluster(&self, py: Python, dataset: &DatasetWrapper) -> Py<PyArray2<f64>> {
@@ -431,10 +483,35 @@ impl PPCAMixWrapper {
     }
 
     pub fn extrapolate(&self, py: Python, dataset: &DatasetWrapper) -> DatasetWrapper {
-        DatasetWrapper(py.allow_threads(|| self.0.smooth(&dataset.0)))
+        DatasetWrapper(py.allow_threads(|| self.0.extrapolate(&dataset.0)))
     }
 
     pub fn iterate(&self, py: Python, dataset: &DatasetWrapper) -> PPCAMixWrapper {
         PPCAMixWrapper(py.allow_threads(|| self.0.iterate(&dataset.0)))
+    }
+
+    pub fn to_canonical(&self, py: Python) -> PPCAMixWrapper {
+        PPCAMixWrapper(py.allow_threads(|| self.0.to_canonical()))
+    }
+
+    pub fn __setstate__(&mut self, py: Python, state: PyObject) -> PyResult<()> {
+        match state.extract::<&PyBytes>(py) {
+            Ok(s) => {
+                self.0 = PPCAMixWrapper::load(s.as_bytes())?.0;
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn __getstate__(&self, py: Python) -> PyResult<PyObject> {
+        Ok(PyBytes::new(py, &self.dump()).to_object(py))
+    }
+
+    pub fn __getnewargs__(
+        &self,
+        py: Python<'_>,
+    ) -> PyResult<(Vec<PPCAModelWrapper>, Py<PyArray1<f64>>)> {
+        Ok((self.models(), self.log_weights(py)))
     }
 }

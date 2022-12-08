@@ -118,13 +118,17 @@ class PPCAModel:
     """The number of hidden values for this model."""
     n_parameters: int
     """The total number of parameters involved in training (used for information criteria)."""
-    transform: np.ndarray
 
     @staticmethod
     def load(b: bytes) -> PPCAModel:
-        """Loads a PPCA model from binary data. Use this if you want to avoid picking."""
+        """
+        Loads a PPCA model from binary data. Use this if you want to avoid picking.
+        """
     def dump(self) -> bytes:
-        """Encodes the PPCA model into binary data. Use this if you want to avoid picking."""
+        """
+        Encodes the PPCA model into binary data. Use this if you want to avoid
+        picking.
+        """
     @classmethod
     def init(cls, n_states: int) -> PPCAModel:
         """Creates an uninformed model to seed the trainment."""
@@ -159,8 +163,85 @@ class PPCAModel:
         """Extrapolates the missing values with the most probable values."""
     def iterate(self, dataset: Dataset) -> PPCAModel:
         """
-        Makes one iteration of the EM algorithm for the PPCA over an onbserved dataset,
+        Makes one iteration of the EM algorithm for the PPCA over an observed dataset,
         returning the improved model.
+        """
+    def to_canonical(self) -> PPCAModel:
+        """
+        Returns a canonical version of this model. This does not alter the log-probablility
+        function nor the quality of the training. All it does is to transform the hidden
+        variables.
+        """
+
+
+class PPCAMix:
+    """
+    A mixture of PPCA models. Each PPCA model is associated with a prior probability
+    expressed in log-scale. This models allows for modelling of data clustering and
+    non-linear learning of data. However, it will use significantly more memory and is
+    not guaranteed to converge to a global maximum.
+
+    # Notes
+
+    * The list of log-weights does not need to be normalized. Normalization is carried out
+    internally.
+    * Each PPCA model in the mixture might have its own state size. However, all PPCA
+    models must have the same output space. Additionally, the set of PPCA models must be
+    non-empty.
+    """
+
+    def __init__(
+        self, models: List[PPCAModel], log_weights: np.ndarray,
+    ) -> None: ...
+
+    output_size: int
+    """The number of features for this model."""
+    state_sizes: List[int]
+    """The number of hidden values for each PPCA model in the mixture."""
+    n_parameters: int
+    """The total number of parameters involved in training (used for information criteria)."""
+
+    @staticmethod
+    def load(b: bytes) -> PPCAModel:
+        """
+        Loads a PPCA mixture model from binary data. Use this if you want to avoid picking.
+        """
+    def dump(self) -> bytes:
+        """
+        Encodes the PPCA mixture model into binary data. Use this if you want to avoid
+        picking.
+        """
+    @classmethod
+    def init(cls, n_states: int) -> PPCAModel:
+        """Creates an uninformed model to seed the trainment."""
+    def __repr__(self) -> str: ...
+    def llk(self, dataset: Dataset) -> float:
+        """
+        Calculates the log-probability of a given masked dataset according to the current
+        model.
+        """
+    def llks(self, dataset: Dataset) -> np.ndarray:
+        """
+        Calculates the log-probability of **each sample** in a given masked dataset
+        according to the current model.
+        """
+    def sample(self, dataset_size: int, mask_prob: float) -> Dataset:
+        """
+        Samples random outputs from the model and masks each entry according to a
+        Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+        generated value.
+        """
+    def smooth(self, dataset: Dataset) -> Dataset:
+        """
+        Filters a dataset of samples, removing noise from the extant samples and
+        inferring the missing samples.
+        """
+    def extrapolate(self, dataset: Dataset) -> Dataset:
+        """Extrapolates the missing values with the most probable values."""
+    def iterate(self, dataset: Dataset) -> PPCAModel:
+        """
+        Makes one iteration of the EM algorithm for the PPCA mixture model over an
+        observed dataset, returning a improved model.
         """
     def to_canonical(self) -> PPCAModel:
         """

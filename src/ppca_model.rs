@@ -282,28 +282,29 @@ impl PPCAModel {
             .into()
     }
 
+    pub(crate) fn sample_one(&self, mask_prob: f64) -> MaskedSample {
+        let sampled_state: DVector<f64> =
+            &*self.output_covariance.transform * standard_noise(self.state_size()) + &self.mean;
+        let noise: DVector<f64> =
+            self.output_covariance.isotropic_noise * standard_noise(self.output_size());
+        let mask = Mask(
+            Bernoulli::new(1.0 - mask_prob as f64)
+                .expect("invalid mask probability")
+                .sample_iter(rand::thread_rng())
+                .take(self.output_size())
+                .collect::<BitVec>(),
+        );
+
+        MaskedSample {
+            data: mask.fillna(&(sampled_state + noise)),
+            mask,
+        }
+    }
+
     pub fn sample(&self, dataset_size: usize, mask_prob: f64) -> Dataset {
         (0..dataset_size)
             .into_par_iter()
-            .map(|_| {
-                let sampled_state: DVector<f64> = &*self.output_covariance.transform
-                    * standard_noise(self.state_size())
-                    + &self.mean;
-                let noise: DVector<f64> =
-                    self.output_covariance.isotropic_noise * standard_noise(self.output_size());
-                let mask = Mask(
-                    Bernoulli::new(1.0 - mask_prob as f64)
-                        .expect("invalid mask probability")
-                        .sample_iter(rand::thread_rng())
-                        .take(self.output_size())
-                        .collect::<BitVec>(),
-                );
-
-                MaskedSample {
-                    data: mask.fillna(&(sampled_state + noise)),
-                    mask,
-                }
-            })
+            .map(|_| self.sample_one(mask_prob))
             .collect()
     }
 
