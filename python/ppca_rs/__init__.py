@@ -141,7 +141,7 @@ class DataFrameAdapter:
 
         # Create an empty dataset...
         output_size = len(dimensions_idx)
-        dataset_len = grouped.nunique()
+        dataset_len = len(grouped)
         dataset = np.repeat(np.nan, dataset_len * output_size).reshape((dataset_len, -1))
 
         # ... then populate it!
