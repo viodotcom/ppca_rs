@@ -410,6 +410,16 @@ impl PPCAMixWrapper {
     }
 
     #[staticmethod]
+    fn init(
+        py: Python,
+        n_models: usize,
+        state_size: usize,
+        dataset: &DatasetWrapper,
+    ) -> PPCAMixWrapper {
+        py.allow_threads(|| PPCAMixWrapper(PPCAMix::init(n_models, state_size, &dataset.0)))
+    }
+
+    #[staticmethod]
     fn load(bytes: &[u8]) -> PyResult<PPCAMixWrapper> {
         Ok(PPCAMixWrapper(bincode::deserialize(bytes).map_err(
             |err| pyo3::exceptions::PyException::new_err(err.to_string()),
@@ -468,7 +478,12 @@ impl PPCAMixWrapper {
         py.allow_threads(|| self.0.llk(&dataset.0))
     }
 
-    pub fn sample(&self, py: Python<'_>, dataset_size: usize, mask_probability: f64) -> DatasetWrapper {
+    pub fn sample(
+        &self,
+        py: Python<'_>,
+        dataset_size: usize,
+        mask_probability: f64,
+    ) -> DatasetWrapper {
         DatasetWrapper(py.allow_threads(|| self.0.sample(dataset_size, mask_probability)))
     }
 

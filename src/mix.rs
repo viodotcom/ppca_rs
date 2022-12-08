@@ -50,6 +50,15 @@ impl PPCAMix {
         }
     }
 
+    pub fn init(n_models: usize, state_size: usize, dataset: &Dataset) -> PPCAMix {
+        PPCAMix::new(
+            (0..n_models)
+                .map(|_| PPCAModel::init(state_size, dataset))
+                .collect(),
+            vec![0.0; n_models].into(),
+        )
+    }
+
     pub fn output_size(&self) -> usize {
         self.output_size
     }

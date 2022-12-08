@@ -129,9 +129,9 @@ class PPCAModel:
         Encodes the PPCA model into binary data. Use this if you want to avoid
         picking.
         """
-    @classmethod
-    def init(cls, n_states: int) -> PPCAModel:
-        """Creates an uninformed model to seed the trainment."""
+    @staticmethod
+    def init(n_states: int) -> PPCAModel:
+        """Creates an uninformed random model to seed the trainment."""
     def __repr__(self) -> str: ...
     def llk(self, dataset: Dataset) -> float:
         """
@@ -173,7 +173,6 @@ class PPCAModel:
         variables.
         """
 
-
 class PPCAMix:
     """
     A mixture of PPCA models. Each PPCA model is associated with a prior probability
@@ -191,7 +190,9 @@ class PPCAMix:
     """
 
     def __init__(
-        self, models: List[PPCAModel], log_weights: np.ndarray,
+        self,
+        models: List[PPCAModel],
+        log_weights: np.ndarray,
     ) -> None: ...
 
     output_size: int
@@ -211,9 +212,12 @@ class PPCAMix:
         Encodes the PPCA mixture model into binary data. Use this if you want to avoid
         picking.
         """
-    @classmethod
-    def init(cls, n_states: int) -> PPCAModel:
-        """Creates an uninformed model to seed the trainment."""
+    @staticmethod
+    def init(n_models: int, n_states: int) -> PPCAModel:
+        """
+        Creates an uninformed random model to seed the trainment. All constituent models
+        will have the same state size.
+        """
     def __repr__(self) -> str: ...
     def llk(self, dataset: Dataset) -> float:
         """

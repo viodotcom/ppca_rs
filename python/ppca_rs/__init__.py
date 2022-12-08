@@ -22,8 +22,8 @@ class TrainMetrics:
 class PPCATrainer:
     """A trainer for a PPCA Model over masked data."""
 
-    # The list of masked samples against which the PPCA will be trained.
     dataset: Dataset
+    """The list of masked samples against which the PPCA will be trained."""
 
     def __init(self, state_size: int) -> PPCAModel:
         """Initializes a first guess for the model."""
@@ -51,6 +51,45 @@ class PPCATrainer:
                     / len(self.dataset),
                 )
                 print(f"Masked PPCA iteration {idx + 1}: aic={metrics.aic}")
+
+            model = model.iterate(self.dataset)
+
+        return model.to_canonical()
+
+
+@dataclass
+class PPCAMixTrainer:
+    """A trainer for a PPCA Mixture Model over masked data."""
+
+    dataset: Dataset
+    """The list of masked samples against which the PPCA mixture model will be trained."""
+
+    def __init(self, n_models: int, state_size: int) -> PPCAMix:
+        """Initializes a first guess for the model."""
+        init = PPCAMix.init(n_models, state_size, self.dataset)
+        return init
+
+    def train(
+        self,
+        *,
+        start: Optional[PPCAMix] = None,
+        state_size: int,
+        n_iters: int = 10,
+        quiet: bool = False,
+    ) -> PPCAMix:
+        """Trains a PPCA model for a given state size for a given number of iterations."""
+        model = start or self.__init(state_size)
+
+        for idx in range(n_iters):
+            if not quiet:
+                llk = model.llk(self.dataset)
+                metrics = TrainMetrics(
+                    llk_per_sample=llk / len(self.dataset),
+                    aic=2.0 * (model.n_parameters - llk) / len(self.dataset),
+                    bic=(llk - model.n_parameters * np.log(len(self.dataset)))
+                    / len(self.dataset),
+                )
+                print(f"Masked PPCA mix iteration {idx + 1}: aic={metrics.aic}")
 
             model = model.iterate(self.dataset)
 
