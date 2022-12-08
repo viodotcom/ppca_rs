@@ -1,3 +1,4 @@
+mod dataframe_adapter;
 mod mix;
 mod output_covariance;
 mod ppca_model;

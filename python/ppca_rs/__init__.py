@@ -1,4 +1,6 @@
 from __future__ import annotations
+from random import sample
+from tokenize import group
 
 from .ppca_rs import *
 
@@ -114,6 +116,8 @@ class DataFrameAdapter:
     """The metric that will populate the output space"""
     dimensions_idx: Any
     """The mapping between dimensions and dimension indexes."""
+    sample_idx: Any
+    """The mapping between key values and sample indexes."""
     dataset: Dataset
     """The mapped dataset."""
 
@@ -126,6 +130,8 @@ class DataFrameAdapter:
         does not explicitely depend on `pandas`, it uses ducktyping. Be sure you have
         `pandas` installed before using this function.
         """
+        import pandas as pd
+
         # This creates a dimension indexing that is __hopefully__ reproducible.
         dimensions_idx = (
             df[dimensions]
@@ -133,7 +139,7 @@ class DataFrameAdapter:
             .sort_values(dimensions)
             .reset_index(drop=True)
         )
-        dimensions_idx.index.name = "__idx"
+        dimensions_idx.index.name = "__dim_idx"
         dimensions_idx = dimensions_idx.reset_index()
 
         # Join and group!
@@ -142,11 +148,20 @@ class DataFrameAdapter:
         # Create an empty dataset...
         output_size = len(dimensions_idx)
         dataset_len = len(grouped)
-        dataset = np.repeat(np.nan, dataset_len * output_size).reshape((dataset_len, -1))
+        dataset = np.repeat(np.nan, dataset_len * output_size).reshape(
+            (dataset_len, -1)
+        )
+        sample_idx = []
 
         # ... then populate it!
         for i, (_, chunk) in enumerate(grouped):
-            dataset[i, chunk["__idx"]] = chunk[metric]
+            dataset[i, chunk["__dim_idx"]] = chunk[metric]
+
+        sample_idx = grouped.count()
+        sample_idx.index.name = "__sample_idx"
+        sample_idx = sample_idx.reset_index()[[*keys, "sample_idx"]]
 
         # done.
-        return cls(keys, dimensions, metric, dimensions_idx, Dataset(dataset))
+        return cls(
+            keys, dimensions, metric, dimensions_idx, sample_idx, Dataset(dataset)
+        )
