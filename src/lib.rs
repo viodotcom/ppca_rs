@@ -1,3 +1,4 @@
+mod mix;
 mod output_covariance;
 mod ppca_model;
 mod python_bindings;

@@ -1,10 +1,11 @@
 use bit_vec::BitVec;
 use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
-use numpy::{PyArray1, PyArray2, PyReadonlyArray2, ToPyArray};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{prelude::*, types::PyBytes};
 use rayon::prelude::*;
 
 use crate::{
+    mix::PPCAMix,
     ppca_model::{Dataset, InferredMasked, MaskedSample, PPCAModel},
     utils::Mask,
 };
@@ -128,7 +129,7 @@ impl InferredMaskedBatch {
         let outputs: Dataset = py.allow_threads(|| {
             self.data
                 .par_iter()
-                .zip(&dataset.0.data)
+                .zip(&*dataset.0.data)
                 .map(|(inferred, sample)| inferred.extrapolated(&ppca.0, sample))
                 .collect::<Vec<_>>()
                 .into()
@@ -172,7 +173,7 @@ impl InferredMaskedBatch {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
-            .zip(&dataset.0.data)
+            .zip(&*dataset.0.data)
             .map(|(inferred, sample)| {
                 inferred
                     .extrapolated_covariance(&ppca.0, sample)
@@ -191,7 +192,7 @@ impl InferredMaskedBatch {
         let output_covariances_diagonal: Dataset = py.allow_threads(|| {
             self.data
                 .par_iter()
-                .zip(&dataset.0.data)
+                .zip(&*dataset.0.data)
                 .map(|(inferred, sample)| {
                     inferred.extrapolated_covariance_diagonal(&ppca.0, sample)
                 })
@@ -325,6 +326,14 @@ impl PPCAModelWrapper {
         py.allow_threads(|| self.0.llk(&dataset.0))
     }
 
+    fn llks(&self, py: Python<'_>, dataset: &DatasetWrapper) -> Py<PyArray1<f64>> {
+        let llks = py.allow_threads(|| self.0.llks(&dataset.0));
+        llks.to_pyarray(py)
+            .reshape(llks.len())
+            .expect("can reshape")
+            .to_owned()
+    }
+
     fn sample(&self, py: Python<'_>, dataset_size: usize, mask_prob: f64) -> DatasetWrapper {
         py.allow_threads(|| DatasetWrapper(self.0.sample(dataset_size, mask_prob)))
     }
@@ -370,5 +379,62 @@ impl PPCAModelWrapper {
         py: Python<'_>,
     ) -> PyResult<(f64, Py<PyArray2<f64>>, Py<PyArray1<f64>>)> {
         Ok((self.isotropic_noise(), self.transform(py), self.mean(py)))
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "PPCAModel", module = "ppca_rs")]
+#[derive(Debug, Clone)]
+struct PPCAMixWrapper(PPCAMix);
+
+#[pymethods]
+impl PPCAMixWrapper {
+    #[new]
+    pub fn new(
+        models: Vec<PPCAModelWrapper>,
+        log_weights: PyReadonlyArray1<f64>,
+    ) -> PPCAMixWrapper {
+        PPCAMixWrapper(PPCAMix::new(
+            models
+                .into_iter()
+                .map(|PPCAModelWrapper(model)| model)
+                .collect(),
+            log_weights
+                .as_array()
+                .into_iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .into(),
+        ))
+    }
+
+    pub fn llks(&self, py: Python, dataset: &DatasetWrapper) -> Py<PyArray1<f64>> {
+        let llks = py.allow_threads(|| self.0.llks(&dataset.0));
+        llks.to_pyarray(py)
+            .reshape(llks.len())
+            .expect("can reshape")
+            .to_owned()
+    }
+
+    pub fn llk(&self, py: Python, dataset: &DatasetWrapper) -> f64 {
+        py.allow_threads(|| self.0.llk(&dataset.0))
+    }
+
+    pub fn infer_cluster(&self, py: Python, dataset: &DatasetWrapper) -> Py<PyArray2<f64>> {
+        py.allow_threads(|| self.0.infer_cluster(&dataset.0))
+            .to_pyarray(py)
+            .to_owned()
+    }
+
+    pub fn smooth(&self, py: Python, dataset: &DatasetWrapper) -> DatasetWrapper {
+        DatasetWrapper(py.allow_threads(|| self.0.smooth(&dataset.0)))
+    }
+
+    pub fn extrapolate(&self, py: Python, dataset: &DatasetWrapper) -> DatasetWrapper {
+        DatasetWrapper(py.allow_threads(|| self.0.smooth(&dataset.0)))
+    }
+
+    pub fn iterate(&self, py: Python, dataset: &DatasetWrapper) -> PPCAMixWrapper {
+        PPCAMixWrapper(py.allow_threads(|| self.0.iterate(&dataset.0)))
     }
 }

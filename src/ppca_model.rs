@@ -5,6 +5,7 @@ use rand_distr::Bernoulli;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::output_covariance::OutputCovariance;
 use crate::utils::{standard_noise, standard_noise_matrix, Mask};
@@ -53,18 +54,80 @@ impl MaskedSample {
 }
 
 pub struct Dataset {
-    pub(crate) data: Vec<MaskedSample>,
+    pub(crate) data: Arc<Vec<MaskedSample>>,
+    pub(crate) weights: Vec<f64>,
 }
 
 impl From<Vec<MaskedSample>> for Dataset {
     fn from(value: Vec<MaskedSample>) -> Self {
-        Dataset { data: value }
+        Dataset {
+            weights: vec![1.0; value.len()],
+            data: Arc::new(value),
+        }
+    }
+}
+
+impl FromIterator<MaskedSample> for Dataset {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = MaskedSample>,
+    {
+        let data: Vec<_> = iter.into_iter().collect();
+        Self::new(data)
+    }
+}
+
+impl FromIterator<(MaskedSample, f64)> for Dataset {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = (MaskedSample, f64)>,
+    {
+        let (data, weights): (Vec<_>, Vec<_>) = iter.into_iter().unzip();
+        Self::new_with_weights(data, weights)
+    }
+}
+
+impl FromParallelIterator<MaskedSample> for Dataset {
+    fn from_par_iter<T>(iter: T) -> Self
+    where
+        T: IntoParallelIterator<Item = MaskedSample>,
+    {
+        let data: Vec<_> = iter.into_par_iter().collect();
+        Self::new(data)
+    }
+}
+
+impl FromParallelIterator<(MaskedSample, f64)> for Dataset {
+    fn from_par_iter<T>(iter: T) -> Self
+    where
+        T: IntoParallelIterator<Item = (MaskedSample, f64)>,
+    {
+        let (data, weights): (Vec<_>, Vec<_>) = iter.into_par_iter().unzip();
+        Self::new_with_weights(data, weights)
     }
 }
 
 impl Dataset {
     pub fn new(data: Vec<MaskedSample>) -> Dataset {
-        Dataset { data }
+        Dataset {
+            weights: vec![1.0; data.len()],
+            data: Arc::new(data),
+        }
+    }
+
+    pub fn new_with_weights(data: Vec<MaskedSample>, weights: Vec<f64>) -> Dataset {
+        assert_eq!(data.len(), weights.len());
+        Dataset {
+            data: Arc::new(data),
+            weights,
+        }
+    }
+
+    pub fn with_weights(&self, weights: Vec<f64>) -> Dataset {
+        Dataset {
+            data: self.data.clone(),
+            weights,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -185,16 +248,38 @@ impl PPCAModel {
         dataset
             .data
             .par_iter()
+            .zip(&dataset.weights)
+            .filter(|(sample, _)| !sample.is_empty())
+            .map(|(sample, weight)| {
+                let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
+                let sub_covariance = self.output_covariance.masked(&sample.mask);
+
+                let llk = -sub_covariance.quadratic_form(&sub_sample) / 2.0
+                    - sub_covariance.covariance_log_det() / 2.0
+                    - LN_2PI / 2.0 * sub_covariance.output_size() as f64;
+
+                llk * weight
+            })
+            .sum()
+    }
+
+    pub fn llks(&self, dataset: &Dataset) -> DVector<f64> {
+        dataset
+            .data
+            .par_iter()
             .filter(|sample| !sample.is_empty())
             .map(|sample| {
                 let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
                 let sub_covariance = self.output_covariance.masked(&sample.mask);
 
-                -sub_covariance.quadratic_form(&sub_sample) / 2.0
+                let llk = -sub_covariance.quadratic_form(&sub_sample) / 2.0
                     - sub_covariance.covariance_log_det() / 2.0
-                    - LN_2PI / 2.0 * sub_covariance.output_size() as f64
+                    - LN_2PI / 2.0 * sub_covariance.output_size() as f64;
+
+                llk
             })
-            .sum()
+            .collect::<Vec<_>>()
+            .into()
     }
 
     pub fn sample(&self, dataset_size: usize, mask_prob: f64) -> Dataset {
@@ -219,8 +304,7 @@ impl PPCAModel {
                     mask,
                 }
             })
-            .collect::<Vec<_>>()
-            .into()
+            .collect()
     }
 
     pub fn infer(&self, dataset: &Dataset) -> Vec<InferredMasked> {
@@ -246,21 +330,21 @@ impl PPCAModel {
     pub fn smooth(&self, dataset: &Dataset) -> Dataset {
         self.infer(dataset)
             .into_par_iter()
-            .map(|inferred| inferred.smoothed(&self))
-            .map(MaskedSample::unmasked)
-            .collect::<Vec<_>>()
-            .into()
+            .zip(&dataset.weights)
+            .map(|(inferred, &weight)| (MaskedSample::unmasked(inferred.smoothed(&self)), weight))
+            .collect()
     }
 
     pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
         self.infer(dataset)
             .into_par_iter()
-            .zip(&dataset.data)
-            .map(|(inferred, sample)| inferred.extrapolated(self, sample))
-            .collect::<Vec<_>>()
-            .into()
+            .zip(&*dataset.data)
+            .zip(&dataset.weights)
+            .map(|((inferred, sample), &weight)| (inferred.extrapolated(self, sample), weight))
+            .collect()
     }
 
+    #[must_use]
     pub fn iterate(&self, dataset: &Dataset) -> PPCAModel {
         let inferred = self.infer(dataset);
 
@@ -268,10 +352,11 @@ impl PPCAModel {
         let total_cross_moment = dataset
             .data
             .par_iter()
+            .zip(&dataset.weights)
             .zip(&inferred)
-            .map(|(sample, inferred)| {
+            .map(|((sample, &weight), inferred)| {
                 let centered_filled = sample.mask.fillna(&(sample.data_vector() - &self.mean));
-                centered_filled * inferred.state.transpose()
+                weight * centered_filled * inferred.state.transpose()
             })
             .reduce(
                 || DMatrix::zeros(self.output_size(), self.state_size()),
@@ -283,13 +368,14 @@ impl PPCAModel {
                 let total_second_moment = dataset
                     .data
                     .iter()
+                    .zip(&dataset.weights)
                     .zip(&inferred)
-                    .filter(|(sample, _)| sample.mask.0[idx])
-                    .map(|(_, inferred)| inferred.second_moment())
+                    .filter(|((sample, _), _)| sample.mask.0[idx])
+                    .map(|((_, &weight), inferred)| weight * inferred.second_moment())
                     // In case we get an empty dimension...
                     .chain([DMatrix::zeros(self.state_size(), self.state_size())])
                     .sum::<DMatrix<f64>>()
-                    + 1.0 * DMatrix::<f64>::identity(self.state_size(), self.state_size());
+                    + 1e-6 * DMatrix::<f64>::identity(self.state_size(), self.state_size());
                 let cross_moment_row = total_cross_moment.row(idx).transpose();
                 total_second_moment
                     .qr()
@@ -308,10 +394,10 @@ impl PPCAModel {
         let new_transform = DMatrix::from_rows(&new_transform_rows);
 
         // Updated isotropic noise:
-        let (square_error, deviations_square_sum, total_deviation, totals) = dataset.data.par_iter().zip(&inferred)
-        .filter(|(sample, _)| !sample.is_empty())
+        let (square_error, deviations_square_sum, total_deviation, totals) = dataset.data.par_iter().zip(&dataset.weights).zip(&inferred)
+        .filter(|((sample, _), _)| !sample.is_empty())
         .map(
-            |(sample, inferred)| {
+            |((sample, &weight), inferred)| {
             let sub_covariance = self.output_covariance.masked(&sample.mask);
             let sub_transform = &*sub_covariance.transform;
             let deviation = sample.mask.fillna(
@@ -321,10 +407,10 @@ impl PPCAModel {
             );
 
             (
-                (sub_transform * &inferred.covariance).dot(&sub_transform),
-                deviation.norm_squared(),
-                deviation,
-                sample.mask.as_vector()
+                weight * (sub_transform * &inferred.covariance).dot(&sub_transform),
+                weight * deviation.norm_squared(),
+                weight * deviation,
+                weight * sample.mask.as_vector(),
             )
         }).reduce_with(|
             (square_error, deviation_square_sum, total_deviation, totals),

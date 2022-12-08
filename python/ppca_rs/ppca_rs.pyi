@@ -134,6 +134,11 @@ class PPCAModel:
         Calculates the log-probability of a given masked dataset according to the current
         model.
         """
+    def llks(self, dataset: Dataset) -> np.ndarray:
+        """
+        Calculates the log-probability of **each sample** in a given masked dataset
+        according to the current model.
+        """
     def sample(self, dataset_size: int, mask_prob: float) -> Dataset:
         """
         Samples random outputs from the model and masks each entry according to a
