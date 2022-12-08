@@ -308,40 +308,51 @@ impl PPCAModel {
             .collect()
     }
 
+    pub(crate) fn infer_one(&self, sample: &MaskedSample) -> InferredMasked {
+        if sample.is_empty() {
+            return self.uninferred();
+        }
+
+        let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
+        let sub_covariance = self.output_covariance.masked(&sample.mask);
+
+        InferredMasked {
+            state: sub_covariance.estimator_transform() * sub_sample,
+            covariance: sub_covariance.estimator_covariance(),
+        }
+    }
+
     pub fn infer(&self, dataset: &Dataset) -> Vec<InferredMasked> {
         dataset
             .data
             .par_iter()
-            .map(|sample| {
-                if sample.is_empty() {
-                    return self.uninferred();
-                }
-
-                let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
-                let sub_covariance = self.output_covariance.masked(&sample.mask);
-
-                InferredMasked {
-                    state: sub_covariance.estimator_transform() * sub_sample,
-                    covariance: sub_covariance.estimator_covariance(),
-                }
-            })
+            .map(|sample| self.infer_one(sample))
             .collect()
+    }
+
+    pub(crate) fn smooth_one(&self, sample: &MaskedSample) -> MaskedSample {
+        MaskedSample::unmasked(self.infer_one(sample).smoothed(&self))
     }
 
     pub fn smooth(&self, dataset: &Dataset) -> Dataset {
-        self.infer(dataset)
-            .into_par_iter()
+        dataset
+            .data
+            .par_iter()
             .zip(&dataset.weights)
-            .map(|(inferred, &weight)| (MaskedSample::unmasked(inferred.smoothed(&self)), weight))
+            .map(|(sample, &weight)| (self.smooth_one(sample), weight))
             .collect()
     }
 
+    pub(crate) fn extrapolate_one(&self, sample: &MaskedSample) -> MaskedSample {
+        self.infer_one(sample).extrapolated(self, sample)
+    }
+
     pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
-        self.infer(dataset)
-            .into_par_iter()
-            .zip(&*dataset.data)
+        dataset
+            .data
+            .par_iter()
             .zip(&dataset.weights)
-            .map(|((inferred, sample), &weight)| (inferred.extrapolated(self, sample), weight))
+            .map(|(sample, &weight)| (self.extrapolate_one(sample), weight))
             .collect()
     }
 

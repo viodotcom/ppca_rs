@@ -9,7 +9,7 @@ class Dataset:
 
     ## Note
 
-    All arrays involved have to be of data type `float32`.
+    All arrays involved have to be of data type `float64`.
     """
 
     def __init__(self, ndarray: np.ndarray) -> None: ...
@@ -94,7 +94,7 @@ class PPCAModel:
 
     ## Note
 
-    All arrays involved have to be of data type `float32`.
+    All arrays involved have to be of data type `float64`.
     """
 
     def __init__(
