@@ -63,7 +63,9 @@ class InferredMasked:
         """
         The extrapolated output values.
         """
-    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> List[np.ndarray]:
+    def extrapolated_covariances(
+        self, model: PPCAModel, dataset: Dataset
+    ) -> List[np.ndarray]:
         """
         The covariance for the extraplated values.
         """
@@ -173,7 +175,6 @@ class PPCAModel:
         variables.
         """
 
-
 class InferredMaskedMix:
     """
     A class containing the result of the Bayesian inference step in `PPCAModel.infer`.
@@ -217,7 +218,9 @@ class InferredMaskedMix:
         """
         The extrapolated output values.
         """
-    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> List[np.ndarray]:
+    def extrapolated_covariances(
+        self, model: PPCAModel, dataset: Dataset
+    ) -> List[np.ndarray]:
         """
         The covariance for the extraplated values.
         """
@@ -233,7 +236,6 @@ class InferredMaskedMix:
         Use this not to get lost with big matrices in the output, losing CPU, memory and
         hair.
         """
-
 
 class PPCAMix:
     """
