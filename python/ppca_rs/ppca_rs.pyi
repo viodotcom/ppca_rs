@@ -45,7 +45,7 @@ class InferredMasked:
         """
         The smoothed output values.
         """
-    def smoothed_covariances(self, model: PPCAModel) -> Dataset:
+    def smoothed_covariances(self, model: PPCAModel) -> List[np.ndarray]:
         """
         The covariance for the smoothed output values.
         """
@@ -63,7 +63,7 @@ class InferredMasked:
         """
         The extrapolated output values.
         """
-    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> Dataset:
+    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> List[np.ndarray]:
         """
         The covariance for the extraplated values.
         """
@@ -199,7 +199,7 @@ class InferredMaskedMix:
         """
         The smoothed output values.
         """
-    def smoothed_covariances(self, model: PPCAModel) -> Dataset:
+    def smoothed_covariances(self, model: PPCAModel) -> List[np.ndarray]:
         """
         The covariance for the smoothed output values.
         """
@@ -217,7 +217,7 @@ class InferredMaskedMix:
         """
         The extrapolated output values.
         """
-    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> Dataset:
+    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> List[np.ndarray]:
         """
         The covariance for the extraplated values.
         """
