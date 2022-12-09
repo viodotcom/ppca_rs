@@ -159,7 +159,7 @@ class DataFrameAdapter:
 
         sample_idx = grouped.count()
         sample_idx.index.name = "__sample_idx"
-        sample_idx = sample_idx.reset_index()[[*keys, "sample_idx"]]
+        sample_idx = sample_idx.reset_index()[[*keys, "__sample_idx"]]
 
         # done.
         return cls(

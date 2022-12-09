@@ -53,6 +53,7 @@ impl MaskedSample {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Dataset {
     pub(crate) data: Arc<Vec<MaskedSample>>,
     pub(crate) weights: Vec<f64>,

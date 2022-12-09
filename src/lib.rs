@@ -4,6 +4,7 @@ mod output_covariance;
 mod ppca_model;
 mod python_bindings;
 mod utils;
+mod polars_python_hack;
 
 #[cfg(test)]
 mod test {

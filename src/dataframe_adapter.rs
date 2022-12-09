@@ -1,8 +1,9 @@
-use crate::ppca_model::Dataset;
-use nalgebra::dimension;
+use crate::{ppca_model::{Dataset, MaskedSample}, utils::Mask};
+use bit_vec::BitVec;
 use polars::prelude::*;
 use polars_lazy::{dsl::Expr, prelude::*};
 
+#[derive(Debug, Clone)]
 pub struct DataFrameAdapter {
     keys: Vec<String>,
     dimensions: Vec<String>,
@@ -61,13 +62,37 @@ impl DataFrameAdapter {
                 .collect::<Vec<Arc<str>>>(),
         )?;
 
-        for (dimension, values) in samples
+        let dataset = samples
             .column("__dim_idx")?
             .iter()
             .zip(samples.column(&metric)?.iter())
-        {
-            // let dimension = dimension
-        }
+            .map(|(dimension, values)| {
+                let AnyValue::List(dimension) = dimension else {
+                    panic!("`dimension` should be a series")
+                };
+                    let AnyValue::List(values) = values else {
+                    panic!("`values` should be a series")
+                };
+
+                let dimension = dimension.u32().expect("dimension should be an u32");
+                let values = values.f64().expect("value should be an f64");
+                let output_size = dimension_idx.height();
+
+                let mut data = vec![0.0; output_size];
+                let mut mask = BitVec::from_elem(output_size, false);
+
+                for (dim, val) in dimension
+                    .into_iter()
+                    .zip(values)
+                    .filter_map(|(dim, val)| dim.zip(val))
+                {
+                    data[dim as usize] = val;
+                    mask.set(dim as usize, true);
+                }
+
+                MaskedSample::new(data.into(), Mask(mask))
+            })
+            .collect::<Dataset>();
 
         Ok(DataFrameAdapter {
             keys,
@@ -75,7 +100,7 @@ impl DataFrameAdapter {
             metric,
             dimension_idx,
             sample_idx,
-            dataset: todo!(),
+            dataset,
         })
     }
 }

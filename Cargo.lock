@@ -1004,6 +1004,7 @@ name = "ppca_rs"
 version = "0.2.0"
 dependencies = [
  "approx",
+ "arrow2",
  "bincode",
  "bit-vec",
  "nalgebra",
@@ -1011,6 +1012,7 @@ dependencies = [
  "numpy",
  "ordered-float",
  "polars",
+ "polars-arrow",
  "polars-lazy",
  "pyo3",
  "rand",

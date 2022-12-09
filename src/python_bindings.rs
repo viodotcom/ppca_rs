@@ -1,13 +1,14 @@
 use bit_vec::BitVec;
 use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
+use polars::prelude::DataFrame;
 use pyo3::{prelude::*, types::PyBytes};
 use rayon::prelude::*;
 
 use crate::{
     mix::PPCAMix,
     ppca_model::{Dataset, InferredMasked, MaskedSample, PPCAModel},
-    utils::Mask,
+    utils::Mask, dataframe_adapter::DataFrameAdapter,
 };
 
 /// This module is implemented in Rust.
@@ -530,3 +531,26 @@ impl PPCAMixWrapper {
         Ok((self.models(), self.log_weights(py)))
     }
 }
+
+
+// #[pyclass]
+// #[pyo3(name = "DataFrameAdapter", module = "ppca_rs")]
+// #[derive(Debug, Clone)]
+// struct DataFrameAdapterWrapper(DataFrameAdapter);
+
+// #[pymethods]
+// impl DataFrameAdapterWrapper {
+//     #[staticmethod]
+//     fn build(
+//         df: &PyAny,
+//         keys: Vec<String>,
+//         dimensions: Vec<String>,
+//         metric: String,
+//     ) -> PyResult<DataFrameAdapterWrapper>{
+//         let df = crate::polars_python_hack::array_to_rust(df)?;
+
+//         Ok(DataFrameAdapterWrapper(
+//             DataFrameAdapter::build(df, keys, dimensions, metric)?
+//         ))      
+//     }
+// }
