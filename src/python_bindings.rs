@@ -567,7 +567,7 @@ impl InferredMaskedMixBatch {
                 .flat_map(|inferred| inferred.log_posterior().as_slice().to_vec())
                 .collect::<Vec<_>>()
         });
-        let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
+        let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].len(), &rows);
         matrix.to_pyarray(py).to_owned()
     }
 
@@ -582,7 +582,7 @@ impl InferredMaskedMixBatch {
                 .flat_map(|inferred| inferred.posterior().as_slice().to_vec())
                 .collect::<Vec<_>>()
         });
-        let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
+        let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].len(), &rows);
         matrix.to_pyarray(py).to_owned()
     }
 
