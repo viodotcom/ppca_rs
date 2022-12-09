@@ -297,7 +297,7 @@ class PPCAMix:
         Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
         generated value.
         """
-    def infer(self, dataset: Dataset) -> InferredMasked:
+    def infer(self, dataset: Dataset) -> InferredMaskedMix:
         """
         Infers the hidden components for each sample in the dataset. Use this method for
         fine-grain control on the properties you want to extract from the model.
