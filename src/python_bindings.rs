@@ -556,7 +556,7 @@ struct InferredMaskedMixBatch {
 
 #[pymethods]
 impl InferredMaskedMixBatch {
-    fn log_posterior(&self, py: Python) -> Py<PyArray2<f64>> {
+    fn log_posteriors(&self, py: Python) -> Py<PyArray2<f64>> {
         if self.data.len() == 0 {
             return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
         }
@@ -571,7 +571,7 @@ impl InferredMaskedMixBatch {
         matrix.to_pyarray(py).to_owned()
     }
 
-    fn posterior(&self, py: Python) -> Py<PyArray2<f64>> {
+    fn posteriors(&self, py: Python) -> Py<PyArray2<f64>> {
         if self.data.len() == 0 {
             return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
         }
