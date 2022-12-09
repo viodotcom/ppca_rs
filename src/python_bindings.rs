@@ -531,7 +531,6 @@ impl PPCAMixWrapper {
     }
 }
 
-
 // #[pyclass]
 // #[pyo3(name = "DataFrameAdapter", module = "ppca_rs")]
 // #[derive(Debug, Clone)]
@@ -550,6 +549,6 @@ impl PPCAMixWrapper {
 
 //         Ok(DataFrameAdapterWrapper(
 //             DataFrameAdapter::build(df, keys, dimensions, metric)?
-//         ))      
+//         ))
 //     }
 // }

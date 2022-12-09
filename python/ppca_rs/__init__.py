@@ -76,13 +76,14 @@ class PPCAMixTrainer:
         self,
         *,
         start: Optional[PPCAMix] = None,
+        n_models: int,
         state_size: int,
         n_iters: int = 10,
         metric: Literal["aic"] | Literal["bic"] | Literal["llk"] = "aic",
         quiet: bool = False,
     ) -> PPCAMix:
         """Trains a PPCA model for a given state size for a given number of iterations."""
-        model = start or self.__init(state_size)
+        model = start or self.__init(n_models, state_size)
 
         for idx in range(n_iters):
             if not quiet:

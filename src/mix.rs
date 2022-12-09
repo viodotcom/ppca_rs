@@ -96,41 +96,45 @@ impl PPCAMix {
             .collect()
     }
 
-    pub fn llks(&self, dataset: &Dataset) -> DVector<f64> {
-        let llks = self
-            .models
+    pub(crate) fn llks_one(&self, sample: &MaskedSample) -> DVector<f64> {
+        self.models
             .iter()
-            .map(|model| model.llks(dataset))
-            .collect::<Vec<_>>();
+            .map(|model| model.llk_one(sample))
+            .collect::<Vec<_>>()
+            .into()
+    }
 
-        (0..dataset.len())
-            .into_par_iter()
-            .map(|i| {
-                let llks: DVector<f64> = llks.iter().map(|llk| llk[i]).collect::<Vec<_>>().into();
-                robust_log_softnorm(llks + &self.log_weights)
-            })
+    pub fn llks(&self, dataset: &Dataset) -> DVector<f64> {
+        dataset
+            .data
+            .par_iter()
+            .map(|sample| robust_log_softnorm(self.llks_one(sample) + &self.log_weights))
             .collect::<Vec<_>>()
             .into()
     }
 
     pub fn llk(&self, dataset: &Dataset) -> f64 {
-        self.llks(dataset).sum()
+        // Rayon doesn't like to sum empty stuff...
+        if dataset.is_empty() {
+            return 0.0;
+        }
+
+        dataset
+            .data
+            .par_iter()
+            .zip(&dataset.weights)
+            .map(|(sample, &weight)| {
+                weight * robust_log_softnorm(self.llks_one(sample) + &self.log_weights)
+            })
+            .sum::<f64>()
     }
 
     pub fn infer_cluster(&self, dataset: &Dataset) -> DMatrix<f64> {
-        let llks = self
-            .models
-            .iter()
-            .map(|model| model.llks(dataset))
-            .collect::<Vec<_>>();
-
-        let rows = (0..dataset.len())
-            .into_par_iter()
-            .map(|i| {
-                let llks: DVector<f64> = llks.iter().map(|llk| llk[i]).collect::<Vec<_>>().into();
-                robust_log_softmax(llks + &self.log_weights).transpose()
-            })
-            .collect::<Vec<_>>();
+        let rows: Vec<_> = dataset
+            .data
+            .par_iter()
+            .map(|sample| robust_log_softmax(self.llks_one(sample) + &self.log_weights).transpose())
+            .collect();
 
         DMatrix::from_rows(&*rows)
     }

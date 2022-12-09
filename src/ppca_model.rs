@@ -245,22 +245,29 @@ impl PPCAModel {
             .into()
     }
 
+    pub(crate) fn llk_one(&self, sample: &MaskedSample) -> f64 {
+        let sample = if !sample.is_empty() {
+            sample
+        } else {
+            return 0.0;
+        };
+
+        let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
+        let sub_covariance = self.output_covariance.masked(&sample.mask);
+
+        let llk = -sub_covariance.quadratic_form(&sub_sample) / 2.0
+            - sub_covariance.covariance_log_det() / 2.0
+            - LN_2PI / 2.0 * sub_covariance.output_size() as f64;
+
+        llk
+    }
+
     pub fn llk(&self, dataset: &Dataset) -> f64 {
         dataset
             .data
             .par_iter()
             .zip(&dataset.weights)
-            .filter(|(sample, _)| !sample.is_empty())
-            .map(|(sample, weight)| {
-                let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
-                let sub_covariance = self.output_covariance.masked(&sample.mask);
-
-                let llk = -sub_covariance.quadratic_form(&sub_sample) / 2.0
-                    - sub_covariance.covariance_log_det() / 2.0
-                    - LN_2PI / 2.0 * sub_covariance.output_size() as f64;
-
-                llk * weight
-            })
+            .map(|(sample, weight)| self.llk_one(sample) * weight)
             .sum()
     }
 
@@ -268,17 +275,7 @@ impl PPCAModel {
         dataset
             .data
             .par_iter()
-            .filter(|sample| !sample.is_empty())
-            .map(|sample| {
-                let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
-                let sub_covariance = self.output_covariance.masked(&sample.mask);
-
-                let llk = -sub_covariance.quadratic_form(&sub_sample) / 2.0
-                    - sub_covariance.covariance_log_det() / 2.0
-                    - LN_2PI / 2.0 * sub_covariance.output_size() as f64;
-
-                llk
-            })
+            .map(|sample| self.llk_one(sample))
             .collect::<Vec<_>>()
             .into()
     }
