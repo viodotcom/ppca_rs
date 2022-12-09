@@ -330,17 +330,19 @@ impl InferredMaskedMix {
             .sum::<DMatrix<f64>>()
     }
 
-    // pub fn smoothed_covariance_diagonal(&self, mix: &PPCAMix) -> DVector<f64> {
-    //     let mean = self.smoothed(mix);
-    //     self.inferred
-    //         .iter()
-    //         .zip(&self.posterior())
-    //         .zip(&mix.models)
-    //         .map(|((infered, &weight), ppca)| {
-    //             weight * self.smoothed_covariance_diagonal(mix).iter().zip(&mean)
-    //         })
-    //         .sum()
-    // }
+    pub fn smoothed_covariance_diagonal(&self, mix: &PPCAMix) -> DVector<f64> {
+        let mean = self.smoothed(mix);
+        self.inferred
+            .iter()
+            .zip(&self.posterior())
+            .zip(&mix.models)
+            .map(|((infered, &weight), ppca)| {
+                weight
+                    * (infered.smoothed_covariance_diagonal(ppca)
+                        + (infered.smoothed(ppca) - &mean).map(|v| v.powi(2)))
+            })
+            .sum()
+    }
 
     pub fn extrapolated_covariance(&self, mix: &PPCAMix, sample: &MaskedSample) -> DMatrix<f64> {
         let mean = self.extrapolated(mix, sample).clone();
@@ -369,9 +371,8 @@ impl InferredMaskedMix {
             .zip(&mix.models)
             .map(|((infered, &weight), ppca)| {
                 weight
-                    * self
-                        .extrapolated_covariance_diagonal(mix, sample)
-                        .map(|cov| cov)
+                    * (infered.extrapolated_covariance_diagonal(ppca, sample)
+                        + (infered.extrapolated(ppca, sample) - &mean).map(|v| v.powi(2)))
             })
             .sum()
     }

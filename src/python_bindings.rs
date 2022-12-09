@@ -17,6 +17,7 @@ pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<DatasetWrapper>()?;
     m.add_class::<InferredMaskedBatch>()?;
     m.add_class::<PPCAMixWrapper>()?;
+    m.add_class::<InferredMaskedMixBatch>()?;
     Ok(())
 }
 
@@ -495,6 +496,12 @@ impl PPCAMixWrapper {
             .to_owned()
     }
 
+    fn infer(&self, py: Python<'_>, dataset: &DatasetWrapper) -> InferredMaskedMixBatch {
+        InferredMaskedMixBatch {
+            data: py.allow_threads(|| self.0.infer(&dataset.0)),
+        }
+    }
+
     pub fn smooth(&self, py: Python, dataset: &DatasetWrapper) -> DatasetWrapper {
         DatasetWrapper(py.allow_threads(|| self.0.smooth(&dataset.0)))
     }
@@ -541,6 +548,36 @@ struct InferredMaskedMixBatch {
 
 #[pymethods]
 impl InferredMaskedMixBatch {
+    fn log_posterior(&self, py: Python) -> Py<PyArray2<f64>> {
+        if self.data.len() == 0 {
+            return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
+        }
+
+        let rows = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .flat_map(|inferred| inferred.log_posterior().as_slice().to_vec())
+                .collect::<Vec<_>>()
+        });
+        let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
+        matrix.to_pyarray(py).to_owned()
+    }
+
+    fn posterior(&self, py: Python) -> Py<PyArray2<f64>> {
+        if self.data.len() == 0 {
+            return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
+        }
+
+        let rows = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .flat_map(|inferred| inferred.posterior().as_slice().to_vec())
+                .collect::<Vec<_>>()
+        });
+        let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
+        matrix.to_pyarray(py).to_owned()
+    }
+
     fn states(&self, py: Python) -> Py<PyArray2<f64>> {
         if self.data.len() == 0 {
             return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
@@ -549,9 +586,7 @@ impl InferredMaskedMixBatch {
         let rows = py.allow_threads(|| {
             self.data
                 .par_iter()
-                .map(|inferred| inferred.state().data.as_vec())
-                .flatten()
-                .copied()
+                .flat_map(|inferred| inferred.state().as_slice().to_vec())
                 .collect::<Vec<_>>()
         });
         let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
