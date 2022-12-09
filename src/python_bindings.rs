@@ -249,16 +249,17 @@ impl PPCAModelWrapper {
     }
 
     #[staticmethod]
-    fn load(bytes: &[u8]) -> PyResult<PPCAModelWrapper> {
-        Ok(PPCAModelWrapper(bincode::deserialize(bytes).map_err(
-            |err| pyo3::exceptions::PyException::new_err(err.to_string()),
-        )?))
+    fn load(bytes: &PyBytes) -> PyResult<PPCAModelWrapper> {
+        Ok(PPCAModelWrapper(
+            bincode::deserialize(bytes.as_bytes())
+                .map_err(|err| pyo3::exceptions::PyException::new_err(err.to_string()))?,
+        ))
     }
 
     fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
         PyBytes::new(
             py,
-            &bincode::serialize(&self.0).expect("can always serialize PPCA model")
+            &bincode::serialize(&self.0).expect("can always serialize PPCA model"),
         )
     }
 
@@ -370,7 +371,7 @@ impl PPCAModelWrapper {
     pub fn __setstate__(&mut self, py: Python, state: PyObject) -> PyResult<()> {
         match state.extract::<&PyBytes>(py) {
             Ok(s) => {
-                self.0 = PPCAModelWrapper::load(s.as_bytes())?.0;
+                self.0 = PPCAModelWrapper::load(s)?.0;
                 Ok(())
             }
             Err(e) => Err(e),
@@ -426,16 +427,17 @@ impl PPCAMixWrapper {
     }
 
     #[staticmethod]
-    fn load(bytes: &[u8]) -> PyResult<PPCAMixWrapper> {
-        Ok(PPCAMixWrapper(bincode::deserialize(bytes).map_err(
-            |err| pyo3::exceptions::PyException::new_err(err.to_string()),
-        )?))
+    fn load(bytes: &PyBytes) -> PyResult<PPCAMixWrapper> {
+        Ok(PPCAMixWrapper(
+            bincode::deserialize(bytes.as_bytes())
+                .map_err(|err| pyo3::exceptions::PyException::new_err(err.to_string()))?,
+        ))
     }
 
     fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
         PyBytes::new(
             py,
-            &bincode::serialize(&self.0).expect("can always serialize PPCA model")
+            &bincode::serialize(&self.0).expect("can always serialize PPCA model"),
         )
     }
 
@@ -527,7 +529,7 @@ impl PPCAMixWrapper {
     pub fn __setstate__(&mut self, py: Python, state: PyObject) -> PyResult<()> {
         match state.extract::<&PyBytes>(py) {
             Ok(s) => {
-                self.0 = PPCAMixWrapper::load(s.as_bytes())?.0;
+                self.0 = PPCAMixWrapper::load(s)?.0;
                 Ok(())
             }
             Err(e) => Err(e),
