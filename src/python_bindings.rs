@@ -384,7 +384,7 @@ impl PPCAModelWrapper {
 }
 
 #[pyclass]
-#[pyo3(name = "PPCAModel", module = "ppca_rs")]
+#[pyo3(name = "PPCAMix", module = "ppca_rs")]
 #[derive(Debug, Clone)]
 struct PPCAMixWrapper(PPCAMix);
 
