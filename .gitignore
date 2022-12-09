@@ -1,2 +1,4 @@
 *.so
 /target
+*.csv
+/examples/dataframe_adapter.py

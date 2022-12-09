@@ -1,14 +1,13 @@
 use bit_vec::BitVec;
 use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
-use polars::prelude::DataFrame;
 use pyo3::{prelude::*, types::PyBytes};
 use rayon::prelude::*;
 
 use crate::{
     mix::PPCAMix,
     ppca_model::{Dataset, InferredMasked, MaskedSample, PPCAModel},
-    utils::Mask, dataframe_adapter::DataFrameAdapter,
+    utils::Mask,
 };
 
 /// This module is implemented in Rust.
