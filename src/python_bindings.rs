@@ -5,7 +5,7 @@ use pyo3::{prelude::*, types::PyBytes};
 use rayon::prelude::*;
 
 use crate::{
-    mix::PPCAMix,
+    mix::{InferredMaskedMix, PPCAMix},
     ppca_model::{Dataset, InferredMasked, MaskedSample, PPCAModel},
     utils::Mask,
 };
@@ -76,7 +76,7 @@ impl DatasetWrapper {
 }
 
 #[pyclass]
-#[pyo3(name = "InferredMasked")]
+#[pyo3(name = "InferredMasked", module = "ppca_rs")]
 struct InferredMaskedBatch {
     data: Vec<InferredMasked>,
 }
@@ -131,7 +131,9 @@ impl InferredMaskedBatch {
             self.data
                 .par_iter()
                 .zip(&*dataset.0.data)
-                .map(|(inferred, sample)| inferred.extrapolated(&ppca.0, sample))
+                .map(|(inferred, sample)| {
+                    MaskedSample::unmasked(inferred.extrapolated(&ppca.0, sample))
+                })
                 .collect::<Vec<_>>()
                 .into()
         });
@@ -528,6 +530,139 @@ impl PPCAMixWrapper {
         py: Python<'_>,
     ) -> PyResult<(Vec<PPCAModelWrapper>, Py<PyArray1<f64>>)> {
         Ok((self.models(), self.log_weights(py)))
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "InferredMasked", module = "ppca_rs")]
+struct InferredMaskedMixBatch {
+    data: Vec<InferredMaskedMix>,
+}
+
+#[pymethods]
+impl InferredMaskedMixBatch {
+    fn states(&self, py: Python) -> Py<PyArray2<f64>> {
+        if self.data.len() == 0 {
+            return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
+        }
+
+        let rows = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .map(|inferred| inferred.state().data.as_vec())
+                .flatten()
+                .copied()
+                .collect::<Vec<_>>()
+        });
+        let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
+        matrix.to_pyarray(py).to_owned()
+    }
+
+    fn covariances(&self, py: Python) -> Vec<Py<PyArray2<f64>>> {
+        // No par iter for you because Python is not Sync.
+        self.data
+            .iter()
+            .map(|inferred| inferred.covariance().to_pyarray(py).to_owned())
+            .collect()
+    }
+
+    fn smoothed(&self, py: Python, ppca: &PPCAMixWrapper) -> DatasetWrapper {
+        let outputs: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .map(|inferred| inferred.smoothed(&ppca.0))
+                .map(MaskedSample::unmasked)
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(outputs)
+    }
+
+    fn extrapolated(
+        &self,
+        py: Python,
+        ppca: &PPCAMixWrapper,
+        dataset: &DatasetWrapper,
+    ) -> DatasetWrapper {
+        let outputs: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .zip(&*dataset.0.data)
+                .map(|(inferred, sample)| {
+                    MaskedSample::unmasked(inferred.extrapolated(&ppca.0, sample))
+                })
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(outputs)
+    }
+
+    fn smoothed_covariances(&self, py: Python, ppca: &PPCAMixWrapper) -> Vec<Py<PyArray2<f64>>> {
+        // No par iter for you because Python is not Sync.
+        self.data
+            .iter()
+            .map(|inferred| {
+                inferred
+                    .smoothed_covariance(&ppca.0)
+                    .to_pyarray(py)
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    fn smoothed_covariances_diagonal(&self, py: Python, ppca: &PPCAMixWrapper) -> DatasetWrapper {
+        let output_covariances_diagonal: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .map(|inferred| inferred.smoothed_covariance_diagonal(&ppca.0))
+                .map(MaskedSample::unmasked)
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(output_covariances_diagonal)
+    }
+
+    fn extrapolated_covariances(
+        &self,
+        py: Python,
+        ppca: &PPCAMixWrapper,
+        dataset: &DatasetWrapper,
+    ) -> Vec<Py<PyArray2<f64>>> {
+        // No par iter for you because Python is not Sync.
+        self.data
+            .iter()
+            .zip(&*dataset.0.data)
+            .map(|(inferred, sample)| {
+                inferred
+                    .extrapolated_covariance(&ppca.0, sample)
+                    .to_pyarray(py)
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    fn extrapolated_covariances_diagonal(
+        &self,
+        py: Python,
+        ppca: &PPCAMixWrapper,
+        dataset: &DatasetWrapper,
+    ) -> DatasetWrapper {
+        let output_covariances_diagonal: Dataset = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .zip(&*dataset.0.data)
+                .map(|(inferred, sample)| {
+                    inferred.extrapolated_covariance_diagonal(&ppca.0, sample)
+                })
+                .map(MaskedSample::unmasked)
+                .collect::<Vec<_>>()
+                .into()
+        });
+
+        DatasetWrapper(output_covariances_diagonal)
     }
 }
 

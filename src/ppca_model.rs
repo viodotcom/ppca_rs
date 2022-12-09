@@ -342,7 +342,7 @@ impl PPCAModel {
     }
 
     pub(crate) fn extrapolate_one(&self, sample: &MaskedSample) -> MaskedSample {
-        self.infer_one(sample).extrapolated(self, sample)
+        MaskedSample::unmasked(self.infer_one(sample).extrapolated(self, sample))
     }
 
     pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
@@ -479,7 +479,7 @@ pub struct InferredMasked {
 }
 
 impl InferredMasked {
-    fn second_moment(&self) -> DMatrix<f64> {
+    pub(crate) fn second_moment(&self) -> DMatrix<f64> {
         &self.state * self.state.transpose() + &self.covariance
     }
 
@@ -495,9 +495,9 @@ impl InferredMasked {
         &*ppca.output_covariance.transform * self.state() + &ppca.mean
     }
 
-    pub fn extrapolated(&self, ppca: &PPCAModel, sample: &MaskedSample) -> MaskedSample {
+    pub fn extrapolated(&self, ppca: &PPCAModel, sample: &MaskedSample) -> DVector<f64> {
         let filtered = self.smoothed(&ppca);
-        MaskedSample::unmasked(sample.mask.choose(&sample.data_vector(), &filtered))
+        sample.mask.choose(&sample.data_vector(), &filtered)
     }
 
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
