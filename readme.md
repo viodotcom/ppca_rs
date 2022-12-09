@@ -27,7 +27,7 @@ That's an easy one!
 * It's written in Rust, with only a bit of Python glue on top. You can expect a performance in the same leage as of C code.
 * It uses `rayon` to paralellize computations evenly across as many CPUs as you have.
 * It also uses fancy Linear Algebra Trickery Technology to reduce computational complexity in key bottlenecks. 
-* Battle-tested at FindHotel with some ridiculously huge datasets.
+* Battle-tested at Vio.com with some ridiculously huge datasets.
 
 
 ## Quick example
@@ -58,6 +58,12 @@ extrapolated: Dataset = model.filter_extrapolate(dataset)
 eextrapolated_np = extrapolated.numpy()
 
 ```
+
+## Juicy extras!
+
+* Tired of the linear? Support for PPCA mixture models is coming soon. Clustering and dimensionality reduction in a single tool.
+* Support for adaptation of DataFrames using either `pandas` or `polars`. Never juggle those `df`s in your code again.
+
 
 ## Building from soure
 
