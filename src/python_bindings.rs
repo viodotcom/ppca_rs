@@ -255,8 +255,11 @@ impl PPCAModelWrapper {
         )?))
     }
 
-    fn dump(&self) -> Vec<u8> {
-        bincode::serialize(&self.0).expect("can always serialize PPCA model")
+    fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
+        PyBytes::new(
+            py,
+            &bincode::serialize(&self.0).expect("can always serialize PPCA model")
+        )
     }
 
     #[getter]
@@ -375,7 +378,7 @@ impl PPCAModelWrapper {
     }
 
     pub fn __getstate__(&self, py: Python) -> PyResult<PyObject> {
-        Ok(PyBytes::new(py, &self.dump()).to_object(py))
+        Ok(self.dump(py).to_object(py))
     }
 
     pub fn __getnewargs__(
@@ -429,8 +432,11 @@ impl PPCAMixWrapper {
         )?))
     }
 
-    fn dump(&self) -> Vec<u8> {
-        bincode::serialize(&self.0).expect("can always serialize PPCA model")
+    fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
+        PyBytes::new(
+            py,
+            &bincode::serialize(&self.0).expect("can always serialize PPCA model")
+        )
     }
 
     #[getter]
@@ -529,7 +535,7 @@ impl PPCAMixWrapper {
     }
 
     pub fn __getstate__(&self, py: Python) -> PyResult<PyObject> {
-        Ok(PyBytes::new(py, &self.dump()).to_object(py))
+        Ok(self.dump(py).to_object(py))
     }
 
     pub fn __getnewargs__(
