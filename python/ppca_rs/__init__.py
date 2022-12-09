@@ -1,6 +1,4 @@
 from __future__ import annotations
-from random import sample
-from tokenize import group
 
 from .ppca_rs import *
 
@@ -310,7 +308,7 @@ class DataFrameAdapterDescription:
                 },
             }
         )
-        
+
         return DataFrameAdapter.from_pandas(
             df, keys=self.keys, dimension_idx=dimension_idx, metric=self.metric
         )
