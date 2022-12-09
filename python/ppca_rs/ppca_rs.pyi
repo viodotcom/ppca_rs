@@ -173,6 +173,68 @@ class PPCAModel:
         variables.
         """
 
+
+class InferredMaskedMix:
+    """
+    A class containing the result of the Bayesian inference step in `PPCAModel.infer`.
+    """
+
+    def log_posteriors(self) -> np.ndarray:
+        """
+        The a rank 2 tensor where each row represents log of the posterior distributions
+        for each sample in the batch.
+        """
+    def posteriors(self) -> np.ndarray:
+        """
+        The a rank 2 tensor where each row represents the posterior distributions for each
+        sample in the batch.
+        """
+    def states(self) -> np.ndarray:
+        """The inferred mean value for each sample."""
+    def covariances(self) -> List[np.ndarray]:
+        """
+        The covariance matrices for each sample.
+        """
+    def smoothed(self, model: PPCAModel) -> Dataset:
+        """
+        The smoothed output values.
+        """
+    def smoothed_covariances(self, model: PPCAModel) -> Dataset:
+        """
+        The covariance for the smoothed output values.
+        """
+    def smoothed_covariances_diagonal(self, model: PPCAModel) -> Dataset:
+        """
+        Returns an _approximation_ of the smoothed output covariance matrix, treating each masked
+        output as an independent normal distribution.
+
+        # Note
+
+        Use this not to get lost with big matrices in the output, losing CPU, memory and
+        hair.
+        """
+    def extrapolated(self, model: PPCAModel, dataset: Dataset) -> Dataset:
+        """
+        The extrapolated output values.
+        """
+    def extrapolated_covariances(self, model: PPCAModel, dataset: Dataset) -> Dataset:
+        """
+        The covariance for the extraplated values.
+        """
+    def extrapolated_covariances_diagonal(
+        self, model: PPCAModel, dataset: Dataset
+    ) -> Dataset:
+        """
+        Returns an _approximation_ of the extrapolated output covariance matrix, treating each masked
+        output as an independent normal distribution.
+
+        # Note
+
+        Use this not to get lost with big matrices in the output, losing CPU, memory and
+        hair.
+        """
+
+
 class PPCAMix:
     """
     A mixture of PPCA models. Each PPCA model is associated with a prior probability

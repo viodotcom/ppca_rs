@@ -541,7 +541,7 @@ impl PPCAMixWrapper {
 }
 
 #[pyclass]
-#[pyo3(name = "InferredMasked", module = "ppca_rs")]
+#[pyo3(name = "InferredMaskedMix", module = "ppca_rs")]
 struct InferredMaskedMixBatch {
     data: Vec<InferredMaskedMix>,
 }
