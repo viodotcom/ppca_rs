@@ -313,14 +313,13 @@ class DataFrameAdapter:
             import polars as pl
 
             return (
-
-                    pl.DataFrame(
-                        {
-                            column_name: data,
-                            "__sample_idx": sample_idx,
-                            "__dim_idx": dim_idx,
-                        }
-                    )
+                pl.DataFrame(
+                    {
+                        column_name: data,
+                        "__sample_idx": sample_idx,
+                        "__dim_idx": dim_idx,
+                    }
+                )
                 .join(self.dimension_idx, on="__dim_idx")
                 .join(self.sample_idx, on="__sample_idx")
                 .select(
