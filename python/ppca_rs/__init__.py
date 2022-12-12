@@ -103,9 +103,6 @@ class PPCAMixTrainer:
         return model.to_canonical()
 
 
-import polars as pl
-
-
 @dataclass
 class DataFrameAdapter:
     """Utility class to facilitate the transformation of DataFrames into Datasets."""
@@ -113,13 +110,19 @@ class DataFrameAdapter:
     keys: List[str]
     """A key that will uniquely define a sample inside the DataFrame"""
     dimensions: List[str]
-    """The columns that will define the dimensions of the output space"""
+    """The columns that will define the dimensions of the output space."""
     metric: str
     """The metric that will populate the output space"""
     dimension_idx: Any
-    """The mapping between dimensions and dimension indexes."""
+    """
+    The mapping between dimensions and dimension indexes. A column called `__dim_idx`
+    contains the array index for a given set of dimensions.
+    """
     sample_idx: Any
-    """The mapping between key values and sample indexes."""
+    """
+    The mapping between key values and sample indexes.  A column called `__sample_idx`
+    contains the array index for a given sample.
+    """
     dataset: Dataset
     """The mapped dataset."""
     origin: Literal["pandas"] | Literal["polars"]
@@ -293,6 +296,18 @@ class DataFrameAdapterDescription:
     """The metric that will populate the output space"""
     dimension_idx: List[List]
     """The index of the values that correspond to each dimension in the output space."""
+
+    @classmethod
+    def from_json(cls, value: dict) -> DataFrameAdapterDescription:
+        return cls(**value)
+
+    def to_json(self) -> dict:
+        return {
+            "keys": self.keys,
+            "dimensions": self.dimensions,
+            "metric": self.metric,
+            "dimension_idx": self.dimension_idx,
+        }
 
     def from_pandas(
         self,
