@@ -22,7 +22,7 @@ pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 }
 
 #[pyclass]
-#[pyo3(name = "Dataset")]
+#[pyo3(name = "Dataset", module = "ppca_rs")]
 struct DatasetWrapper(Dataset);
 
 #[pymethods]
@@ -73,6 +73,47 @@ impl DatasetWrapper {
 
     fn empty_dimensions(&self) -> Vec<usize> {
         self.0.empty_dimensions()
+    }
+
+    fn chunks(slf: Py<Self>, py: Python, chunks: usize) -> DatasetChunks {
+        let length = slf.borrow(py).0.len();
+        DatasetChunks {
+            stride: (length as f64 / chunks as f64).ceil() as usize,
+            length,
+            position: 0,
+            dataset: slf,
+        }
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "DatasetChunks", module = "ppca_rs")]
+struct DatasetChunks {
+    stride: usize,
+    length: usize,
+    position: usize,
+    dataset: Py<DatasetWrapper>,
+}
+
+#[pymethods]
+impl DatasetChunks {
+    fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python) -> Option<DatasetWrapper> {
+        if self.position < self.length {
+            let dataset = &self.dataset.borrow(py).0;
+            let data = &dataset.data[self.position..(self.position + self.stride)];
+            let weights = &dataset.weights[self.position..(self.position + self.stride)];
+            let slice = Dataset::new_with_weights(data.to_owned(), weights.to_owned());
+
+            self.position += self.stride;
+
+            Some(DatasetWrapper(slice))
+        } else {
+            None
+        }
     }
 }
 
