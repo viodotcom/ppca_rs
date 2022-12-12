@@ -280,7 +280,7 @@ class DataFrameAdapter:
         else:
             raise Exception(f"Unknown origin {self.origin}")
 
-    def conver_dataset(self, dataset: Dataset, *, column_name: str):
+    def convert_dataset(self, dataset: Dataset, *, column_name: str):
         data = dataset.numpy().reshape((-1,))
         sample_idx = np.repeat(
             np.arange(0, len(self.sample_idx), dtype="uint32"), len(self.dimension_idx)
