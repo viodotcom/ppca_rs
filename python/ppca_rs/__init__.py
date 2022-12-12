@@ -280,6 +280,60 @@ class DataFrameAdapter:
         else:
             raise Exception(f"Unknown origin {self.origin}")
 
+    def conver_dataset(self, dataset: Dataset, *, column_name: str):
+        data = dataset.numpy().reshape((-1,))
+        sample_idx = np.repeat(
+            np.arange(0, len(self.sample_idx), dtype="uint32"), len(self.dimension_idx)
+        )
+        dim_idx = np.tile(
+            np.arange(0, len(self.dimension_idx), dtype="uint32"), len(self.sample_idx)
+        )
+
+        if self.origin == "pandas":
+            import pandas as pd
+
+            return (
+                pd.DataFrame(
+                    {
+                        column_name: data,
+                        "__sample_idx": sample_idx,
+                        "__dim_idx": dim_idx,
+                    }
+                )
+                .merge(self.dimension_idx, on="__dim_idx")
+                .merge(self.sample_idx, on="__sample_idx")[
+                    [
+                        *self.keys,
+                        *self.dimensions,
+                        column_name,
+                    ]
+                ]
+            )
+        elif self.origin == "polars":
+            import polars as pl
+
+            return (
+
+                    pl.DataFrame(
+                        {
+                            column_name: data,
+                            "__sample_idx": sample_idx,
+                            "__dim_idx": dim_idx,
+                        }
+                    )
+                .join(self.dimension_idx, on="__dim_idx")
+                .join(self.sample_idx, on="__sample_idx")
+                .select(
+                    [
+                        *self.keys,
+                        *self.dimensions,
+                        column_name,
+                    ]
+                )
+            )
+        else:
+            raise Exception(f"Unknown origin {self.origin}")
+
 
 @dataclass
 class DataFrameAdapterDescription:
