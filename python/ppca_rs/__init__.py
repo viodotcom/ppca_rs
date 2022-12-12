@@ -309,10 +309,10 @@ class DataFrameAdapterDescription:
             "dimension_idx": self.dimension_idx,
         }
 
-    def from_pandas(
+    def adapt_pandas(
         self,
         df,
-    ):
+    ) -> DataFrameAdapter:
         import pandas as pd
 
         dimension_idx = pd.DataFrame(
@@ -329,10 +329,10 @@ class DataFrameAdapterDescription:
             df, keys=self.keys, dimension_idx=dimension_idx, metric=self.metric
         )
 
-    def from_polars(
+    def adapt_polars(
         self,
         df,
-    ):
+    ) -> DataFrameAdapter:
         import polars as pl
 
         dimension_idx = pl.DataFrame(
