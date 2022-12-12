@@ -27,6 +27,14 @@ class Dataset:
         Returns the size of each sample in this dataset, if the dataset is not empty.
         Else, returns `None`.
         """
+    def chunks(self, chunks: int) -> DatasetChunks:
+        """Returns an iterator over chunks of this dataset, in order."""
+
+class DatasetChunks:
+    """An iterator over chunks of a dataset. See `Dataset.chunks` for more details."""
+
+    def __iter__(self) -> DatasetChunks: ...
+    def __next__(self) -> Dataset: ...
 
 class InferredMasked:
     """

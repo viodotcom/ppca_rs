@@ -103,9 +103,10 @@ impl DatasetChunks {
 
     fn __next__(&mut self, py: Python) -> Option<DatasetWrapper> {
         if self.position < self.length {
+            let range = || self.position..usize::min(self.length, self.position + self.stride);
             let dataset = &self.dataset.borrow(py).0;
-            let data = &dataset.data[self.position..(self.position + self.stride)];
-            let weights = &dataset.weights[self.position..(self.position + self.stride)];
+            let data = &dataset.data[range()];
+            let weights = &dataset.weights[range()];
             let slice = Dataset::new_with_weights(data.to_owned(), weights.to_owned());
 
             self.position += self.stride;
