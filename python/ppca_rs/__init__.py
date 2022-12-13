@@ -3,7 +3,7 @@ from __future__ import annotations
 from .ppca_rs import *
 
 from dataclasses import dataclass
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 
@@ -281,7 +281,10 @@ class DataFrameAdapter:
             raise Exception(f"Unknown origin {self.origin}")
 
     def convert_dataset(self, dataset: Dataset, *, column_name: str):
-        data = dataset.numpy().reshape((-1,))
+        return self.convert_datasets({column_name: dataset})
+
+    def convert_datasets(self, datasets: Dict[str, Dataset]):
+        data = {name: dataset.numpy().reshape((-1,)) for name, dataset in datasets.items()}
         sample_idx = np.repeat(
             np.arange(0, len(self.sample_idx), dtype="uint32"), len(self.dimension_idx)
         )
@@ -295,7 +298,7 @@ class DataFrameAdapter:
             return (
                 pd.DataFrame(
                     {
-                        column_name: data,
+                        **data,
                         "__sample_idx": sample_idx,
                         "__dim_idx": dim_idx,
                     }
@@ -305,7 +308,7 @@ class DataFrameAdapter:
                     [
                         *self.keys,
                         *self.dimensions,
-                        column_name,
+                        *datasets.keys(),
                     ]
                 ]
             )
@@ -315,7 +318,7 @@ class DataFrameAdapter:
             return (
                 pl.DataFrame(
                     {
-                        column_name: data,
+                        **data,
                         "__sample_idx": sample_idx,
                         "__dim_idx": dim_idx,
                     }
@@ -326,7 +329,7 @@ class DataFrameAdapter:
                     [
                         *self.keys,
                         *self.dimensions,
-                        column_name,
+                        *data.keys(),
                     ]
                 )
             )
