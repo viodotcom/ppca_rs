@@ -353,6 +353,34 @@ class DataFrameAdapterDescription:
     dimension_idx: List[List]
     """The index of the values that correspond to each dimension in the output space."""
 
+    @property
+    def dimension_idx_pandas(self) -> Any:
+        import pandas as pd
+
+        return pd.DataFrame(
+            {
+                "__dim_idx": range(len(self.dimension_idx)),
+                **{
+                    dimension: [item[i] for item in self.dimension_idx]
+                    for i, dimension in enumerate(self.dimensions)
+                },
+            }
+        )
+    
+    @property
+    def dimension_idx_polars(self) -> Any:
+        import polars as pl
+
+        return pl.DataFrame(
+            {
+                "__dim_idx": range(len(self.dimension_idx)),
+                **{
+                    dimension: [item[i] for item in self.dimension_idx]
+                    for i, dimension in enumerate(self.dimensions)
+                },
+            }
+        )
+    
     @classmethod
     def from_json(cls, value: dict) -> DataFrameAdapterDescription:
         return cls(**value)
@@ -369,38 +397,14 @@ class DataFrameAdapterDescription:
         self,
         df,
     ) -> DataFrameAdapter:
-        import pandas as pd
-
-        dimension_idx = pd.DataFrame(
-            {
-                "__dim_idx": range(len(self.dimension_idx)),
-                **{
-                    dimension: [item[i] for item in self.dimension_idx]
-                    for i, dimension in enumerate(self.dimensions)
-                },
-            }
-        )
-
         return DataFrameAdapter.from_pandas(
-            df, keys=self.keys, dimension_idx=dimension_idx, metric=self.metric
+            df, keys=self.keys, dimension_idx=self.dimension_idx_pandas, metric=self.metric
         )
 
     def adapt_polars(
         self,
         df,
     ) -> DataFrameAdapter:
-        import polars as pl
-
-        dimension_idx = pl.DataFrame(
-            {
-                "__dim_idx": range(len(self.dimension_idx)),
-                **{
-                    dimension: [item[i] for item in self.dimension_idx]
-                    for i, dimension in enumerate(self.dimensions)
-                },
-            }
-        )
-
         return DataFrameAdapter.from_polars(
-            df, keys=self.keys, dimension_idx=dimension_idx, metric=self.metric
+            df, keys=self.keys, dimension_idx=self.dimension_idx_polars, metric=self.metric
         )
