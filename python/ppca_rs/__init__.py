@@ -359,7 +359,7 @@ class DataFrameAdapterDescription:
 
         return pd.DataFrame(
             {
-                "__dim_idx": range(len(self.dimension_idx)),
+                "__dim_idx": np.arange(0, len(self.dimension_idx), dtype="uint32"),
                 **{
                     dimension: [item[i] for item in self.dimension_idx]
                     for i, dimension in enumerate(self.dimensions)
@@ -373,7 +373,7 @@ class DataFrameAdapterDescription:
 
         return pl.DataFrame(
             {
-                "__dim_idx": range(len(self.dimension_idx)),
+                "__dim_idx": np.arange(0, len(self.dimension_idx), dtype="uint32"),
                 **{
                     dimension: [item[i] for item in self.dimension_idx]
                     for i, dimension in enumerate(self.dimensions)
