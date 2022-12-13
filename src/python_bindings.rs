@@ -1,7 +1,10 @@
 use bit_vec::BitVec;
 use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
-use pyo3::{prelude::*, types::PyBytes};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyList},
+};
 use rayon::prelude::*;
 
 use crate::{
@@ -83,6 +86,21 @@ impl DatasetWrapper {
             position: 0,
             dataset: slf,
         }
+    }
+
+    #[staticmethod]
+    fn concat(list: Vec<Py<DatasetWrapper>>, py: Python) -> DatasetWrapper {
+        let length = list.iter().map(|item| item.borrow(py).0.len()).sum();
+        let mut data = Vec::with_capacity(length);
+        let mut weights = Vec::with_capacity(length);
+
+        for item in list {
+            let dataset = &item.borrow(py).0;
+            data.extend(dataset.data.iter().cloned());
+            weights.extend(dataset.weights.iter().cloned());
+        }
+
+        DatasetWrapper(Dataset::new_with_weights(data, weights))
     }
 }
 
