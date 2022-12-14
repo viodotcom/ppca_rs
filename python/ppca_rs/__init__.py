@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Literal, Optional
 import numpy as np
 
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 
 @dataclass(frozen=True)
@@ -25,9 +25,9 @@ class PPCATrainer:
     dataset: Dataset
     """The list of masked samples against which the PPCA will be trained."""
 
-    def __init(self, state_size: int) -> PPCAModel:
+    def __init(self, state_size: int, smoothing_factor: float) -> PPCAModel:
         """Initializes a first guess for the model."""
-        init = PPCAModel.init(state_size, self.dataset)
+        init = PPCAModel.init(state_size, self.dataset, smoothing_factor)
         return init
 
     def train(
@@ -36,11 +36,15 @@ class PPCATrainer:
         start: Optional[PPCAModel] = None,
         state_size: int,
         n_iters: int = 10,
+        smoothing_factor: float = 0.0,
         metric: Literal["aic"] | Literal["bic"] | Literal["llk"] = "aic",
         quiet: bool = False,
     ) -> PPCAModel:
-        """Trains a PPCA model for a given state size for a given number of iterations."""
-        model = start or self.__init(state_size)
+        """
+        Trains a PPCA model for a given state size for a given number of iterations. Use
+        `smooth_factor` to control for overfit of dimensions with few samples.
+        """
+        model = start or self.__init(state_size, smoothing_factor)
 
         for idx in range(n_iters):
             if not quiet:
@@ -67,9 +71,11 @@ class PPCAMixTrainer:
     dataset: Dataset
     """The list of masked samples against which the PPCA mixture model will be trained."""
 
-    def __init(self, n_models: int, state_size: int) -> PPCAMix:
+    def __init(
+        self, n_models: int, state_size: int, smoothing_factor: float = 0.0
+    ) -> PPCAMix:
         """Initializes a first guess for the model."""
-        init = PPCAMix.init(n_models, state_size, self.dataset)
+        init = PPCAMix.init(n_models, state_size, self.dataset, smoothing_factor)
         return init
 
     def train(
@@ -79,11 +85,15 @@ class PPCAMixTrainer:
         n_models: int,
         state_size: int,
         n_iters: int = 10,
+        smoothing_factor: float = 0.0,
         metric: Literal["aic"] | Literal["bic"] | Literal["llk"] = "aic",
         quiet: bool = False,
     ) -> PPCAMix:
-        """Trains a PPCA model for a given state size for a given number of iterations."""
-        model = start or self.__init(n_models, state_size)
+        """
+        Trains a PPCA mix model for a given state size for a given number of iterations. Use
+        `smooth_factor` to control for overfit of dimensions with few samples.
+        """
+        model = start or self.__init(n_models, state_size, smoothing_factor)
 
         for idx in range(n_iters):
             if not quiet:
