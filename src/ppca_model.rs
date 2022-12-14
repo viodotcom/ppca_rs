@@ -178,17 +178,22 @@ impl Dataset {
 pub struct PPCAModel {
     output_covariance: OutputCovariance<'static>,
     mean: DVector<f64>,
+    /// A factor to smooth out the `transform` matrix when there is little data for a
+    /// given dimension.
+    #[serde(default)]
+    smoothing_factor: f64,
 }
 
 impl PPCAModel {
-    pub fn new(isotropic_noise: f64, transform: DMatrix<f64>, mean: DVector<f64>) -> PPCAModel {
+    pub fn new(isotropic_noise: f64, transform: DMatrix<f64>, mean: DVector<f64>, smoothing_factor: f64) -> PPCAModel {
         PPCAModel {
             output_covariance: OutputCovariance::new_owned(isotropic_noise, transform),
             mean,
+            smoothing_factor,
         }
     }
 
-    pub fn init(state_size: usize, dataset: &Dataset) -> PPCAModel {
+    pub fn init(state_size: usize, dataset: &Dataset, smoothing_factor: f64) -> PPCAModel {
         assert!(!dataset.is_empty());
         let output_size = dataset.output_size().expect("dataset is not empty");
         let empty_dimensions = dataset.empty_dimensions();
@@ -206,6 +211,7 @@ impl PPCAModel {
                 transform: Cow::Owned(rand_transform),
             },
             mean: DVector::zeros(output_size),
+            smoothing_factor,
         }
     }
 
@@ -385,7 +391,7 @@ impl PPCAModel {
                     // In case we get an empty dimension...
                     .chain([DMatrix::zeros(self.state_size(), self.state_size())])
                     .sum::<DMatrix<f64>>()
-                    + 1e-6 * DMatrix::<f64>::identity(self.state_size(), self.state_size());
+                    + self.smoothing_factor * DMatrix::<f64>::identity(self.state_size(), self.state_size());
                 let cross_moment_row = total_cross_moment.row(idx).transpose();
                 total_second_moment
                     .qr()
@@ -444,6 +450,7 @@ impl PPCAModel {
                 transform: Cow::Owned(new_transform),
                 isotropic_noise: average_square_error.sqrt(),
             },
+            smoothing_factor: self.smoothing_factor,
             mean: new_mean,
         }
     }
@@ -467,6 +474,7 @@ impl PPCAModel {
                 self.output_covariance.isotropic_noise,
                 new_transform,
             ),
+            smoothing_factor: self.smoothing_factor,
             mean: self.mean.clone(),
         }
     }

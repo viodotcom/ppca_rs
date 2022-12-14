@@ -29,6 +29,9 @@ class Dataset:
         """
     def chunks(self, chunks: int) -> DatasetChunks:
         """Returns an iterator over chunks of this dataset, in order."""
+    @staticmethod
+    def concat(list: List[Dataset]) -> Dataset:
+        """Concatenates a list of dataset, in order."""
 
 class DatasetChunks:
     """An iterator over chunks of a dataset. See `Dataset.chunks` for more details."""
@@ -108,7 +111,11 @@ class PPCAModel:
     """
 
     def __init__(
-        self, isotropic_noise: float, transform: np.ndarray, mean: np.ndarray
+        self,
+        isotropic_noise: float,
+        transform: np.ndarray,
+        mean: np.ndarray,
+        smoothing_factor: float = 0.0,
     ) -> None: ...
 
     transform: np.ndarray
@@ -117,6 +124,11 @@ class PPCAModel:
     """The standard deviation of the noise in the output space."""
     mean: np.ndarray
     """Then center of mass of the distribution in the output space."""
+    smoothing_factor: float
+    """
+    A factor to smooth out the `transform` matrix when there is little data for a given
+    dimension. Use this as an extra guard aginst overfitting.
+    """
     singular_values: np.ndarray
     """
     The relative strength of each hidden variable on the output. This is equivalent to the
@@ -140,7 +152,7 @@ class PPCAModel:
         picking.
         """
     @staticmethod
-    def init(n_states: int) -> PPCAModel:
+    def init(n_states: int, smoothing_factor: float = 0.0) -> PPCAModel:
         """Creates an uninformed random model to seed the trainment."""
     def __repr__(self) -> str: ...
     def llk(self, dataset: Dataset) -> float:
@@ -265,6 +277,7 @@ class PPCAMix:
         self,
         models: List[PPCAModel],
         log_weights: np.ndarray,
+        smoothing_factor: float = 0.0,
     ) -> None: ...
 
     output_size: int
@@ -285,7 +298,11 @@ class PPCAMix:
         picking.
         """
     @staticmethod
-    def init(n_models: int, n_states: int) -> PPCAModel:
+    def init(
+        n_models: int,
+        n_states: int,
+        smoothing_factor: float = 0.0,
+    ) -> PPCAModel:
         """
         Creates an uninformed random model to seed the trainment. All constituent models
         will have the same state size.

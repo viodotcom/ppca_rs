@@ -50,10 +50,10 @@ impl PPCAMix {
         }
     }
 
-    pub fn init(n_models: usize, state_size: usize, dataset: &Dataset) -> PPCAMix {
+    pub fn init(n_models: usize, state_size: usize, dataset: &Dataset, smoothing_factor: f64) -> PPCAMix {
         PPCAMix::new(
             (0..n_models)
-                .map(|_| PPCAModel::init(state_size, dataset))
+                .map(|_| PPCAModel::init(state_size, dataset, smoothing_factor))
                 .collect(),
             vec![0.0; n_models].into(),
         )

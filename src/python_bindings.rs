@@ -3,7 +3,7 @@ use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyList},
+    types::{PyBytes},
 };
 use rayon::prelude::*;
 
@@ -277,11 +277,13 @@ struct PPCAModelWrapper(PPCAModel);
 #[pymethods]
 impl PPCAModelWrapper {
     #[new]
+    #[args(smoothing_factor="0f64")]
     fn new(
         py: Python<'_>,
         isotropic_noise: f64,
         transform: Py<PyArray2<f64>>,
         mean: Py<PyArray2<f64>>,
+        smoothing_factor: f64,
     ) -> PyResult<PPCAModelWrapper> {
         Ok(PPCAModelWrapper(PPCAModel::new(
             isotropic_noise,
@@ -305,6 +307,7 @@ impl PPCAModelWrapper {
                     )
                 })? as DVectorSlice<f64>)
                 .into_owned(),
+            smoothing_factor,
         )))
     }
 
@@ -374,8 +377,9 @@ impl PPCAModelWrapper {
     }
 
     #[staticmethod]
-    fn init(state_size: usize, dataset: &DatasetWrapper) -> PPCAModelWrapper {
-        PPCAModelWrapper(PPCAModel::init(state_size, &dataset.0))
+    #[args(smoothing_factor="0f64")]
+    fn init(state_size: usize, dataset: &DatasetWrapper, smoothing_factor: f64) -> PPCAModelWrapper {
+        PPCAModelWrapper(PPCAModel::init(state_size, &dataset.0, smoothing_factor))
     }
 
     fn __repr__(&self, py: Python<'_>) -> String {
@@ -477,13 +481,15 @@ impl PPCAMixWrapper {
     }
 
     #[staticmethod]
+    #[args(smoothing_factor="0f64")]
     fn init(
         py: Python,
         n_models: usize,
         state_size: usize,
         dataset: &DatasetWrapper,
+        smoothing_factor: f64,
     ) -> PPCAMixWrapper {
-        py.allow_threads(|| PPCAMixWrapper(PPCAMix::init(n_models, state_size, &dataset.0)))
+        py.allow_threads(|| PPCAMixWrapper(PPCAMix::init(n_models, state_size, &dataset.0, smoothing_factor)))
     }
 
     #[staticmethod]

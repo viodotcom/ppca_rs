@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Literal, Optional
 import numpy as np
 
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 
 @dataclass(frozen=True)
@@ -284,7 +284,9 @@ class DataFrameAdapter:
         return self.convert_datasets({column_name: dataset})
 
     def convert_datasets(self, datasets: Dict[str, Dataset]):
-        data = {name: dataset.numpy().reshape((-1,)) for name, dataset in datasets.items()}
+        data = {
+            name: dataset.numpy().reshape((-1,)) for name, dataset in datasets.items()
+        }
         sample_idx = np.repeat(
             np.arange(0, len(self.sample_idx), dtype="uint32"), len(self.dimension_idx)
         )
@@ -366,7 +368,7 @@ class DataFrameAdapterDescription:
                 },
             }
         )
-    
+
     @property
     def dimension_idx_polars(self) -> Any:
         import polars as pl
@@ -380,7 +382,7 @@ class DataFrameAdapterDescription:
                 },
             }
         )
-    
+
     @classmethod
     def from_json(cls, value: dict) -> DataFrameAdapterDescription:
         return cls(**value)
@@ -398,7 +400,10 @@ class DataFrameAdapterDescription:
         df,
     ) -> DataFrameAdapter:
         return DataFrameAdapter.from_pandas(
-            df, keys=self.keys, dimension_idx=self.dimension_idx_pandas, metric=self.metric
+            df,
+            keys=self.keys,
+            dimension_idx=self.dimension_idx_pandas,
+            metric=self.metric,
         )
 
     def adapt_polars(
@@ -406,5 +411,8 @@ class DataFrameAdapterDescription:
         df,
     ) -> DataFrameAdapter:
         return DataFrameAdapter.from_polars(
-            df, keys=self.keys, dimension_idx=self.dimension_idx_polars, metric=self.metric
+            df,
+            keys=self.keys,
+            dimension_idx=self.dimension_idx_polars,
+            metric=self.metric,
         )

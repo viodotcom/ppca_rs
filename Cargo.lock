@@ -327,7 +327,7 @@ checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
 
 [[package]]
 name = "ppca_rs"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "approx",
  "bincode",
