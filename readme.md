@@ -11,6 +11,11 @@ This package is available in PyPI!
 pip install ppca-rs
 ```
 
+And you can also use it natively in Rust:
+```bash
+cargo add ppca
+```
+
 ## Why use PPCA?
 
 Glad you asked!
@@ -61,7 +66,7 @@ eextrapolated_np = extrapolated.numpy()
 
 ## Juicy extras!
 
-* Tired of the linear? Support for PPCA mixture models is coming soon. Clustering and dimensionality reduction in a single tool.
+* Tired of the linear? We have support for PPCA mixture models. Make the most of your data with clustering and dimensionality reduction in a single tool!
 * Support for adaptation of DataFrames using either `pandas` or `polars`. Never juggle those `df`s in your code again.
 
 

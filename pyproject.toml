@@ -22,7 +22,7 @@ dependencies = ["cffi", "numpy"]
 "email" = "parruda@findhotel.net"
 
 [project.urls]
-"Homepage" = "https://github.com/FindHotel/ppca"
+"Homepage" = "https://github.com/FindHotel/ppca_rs"
 
 [tool.maturin]
 python-source = "python"

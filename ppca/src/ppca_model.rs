@@ -5,175 +5,28 @@ use rand_distr::Bernoulli;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::sync::Arc;
 
+use crate::dataset::{Dataset, MaskedSample};
 use crate::output_covariance::OutputCovariance;
 use crate::utils::{standard_noise, standard_noise_matrix, Mask};
 
 const LN_2PI: f64 = 1.8378770664093453;
 
-#[derive(Debug, Clone)]
-pub struct MaskedSample {
-    data: DVector<f64>,
-    mask: Mask,
-}
-
-impl MaskedSample {
-    pub fn new(data: DVector<f64>, mask: Mask) -> MaskedSample {
-        MaskedSample { data, mask }
-    }
-
-    pub fn unmasked(data: DVector<f64>) -> MaskedSample {
-        MaskedSample {
-            mask: Mask::unmasked(data.len()),
-            data,
-        }
-    }
-
-    pub fn data_vector(&self) -> DVector<f64> {
-        DVector::from(self.data.clone())
-    }
-
-    pub fn is_empty(&self) -> bool {
-        !self.mask.0.any()
-    }
-
-    pub fn mask(&self) -> &Mask {
-        &self.mask
-    }
-
-    pub fn masked_vector(&self) -> DVector<f64> {
-        self.data
-            .iter()
-            .copied()
-            .zip(&self.mask.0)
-            .map(|(value, selected)| if selected { value } else { f64::NAN })
-            .collect::<Vec<_>>()
-            .into()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Dataset {
-    pub(crate) data: Arc<Vec<MaskedSample>>,
-    pub(crate) weights: Vec<f64>,
-}
-
-impl From<Vec<MaskedSample>> for Dataset {
-    fn from(value: Vec<MaskedSample>) -> Self {
-        Dataset {
-            weights: vec![1.0; value.len()],
-            data: Arc::new(value),
-        }
-    }
-}
-
-impl FromIterator<MaskedSample> for Dataset {
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = MaskedSample>,
-    {
-        let data: Vec<_> = iter.into_iter().collect();
-        Self::new(data)
-    }
-}
-
-impl FromIterator<(MaskedSample, f64)> for Dataset {
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = (MaskedSample, f64)>,
-    {
-        let (data, weights): (Vec<_>, Vec<_>) = iter.into_iter().unzip();
-        Self::new_with_weights(data, weights)
-    }
-}
-
-impl FromParallelIterator<MaskedSample> for Dataset {
-    fn from_par_iter<T>(iter: T) -> Self
-    where
-        T: IntoParallelIterator<Item = MaskedSample>,
-    {
-        let data: Vec<_> = iter.into_par_iter().collect();
-        Self::new(data)
-    }
-}
-
-impl FromParallelIterator<(MaskedSample, f64)> for Dataset {
-    fn from_par_iter<T>(iter: T) -> Self
-    where
-        T: IntoParallelIterator<Item = (MaskedSample, f64)>,
-    {
-        let (data, weights): (Vec<_>, Vec<_>) = iter.into_par_iter().unzip();
-        Self::new_with_weights(data, weights)
-    }
-}
-
-impl Dataset {
-    pub fn new(data: Vec<MaskedSample>) -> Dataset {
-        Dataset {
-            weights: vec![1.0; data.len()],
-            data: Arc::new(data),
-        }
-    }
-
-    pub fn new_with_weights(data: Vec<MaskedSample>, weights: Vec<f64>) -> Dataset {
-        assert_eq!(data.len(), weights.len());
-        Dataset {
-            data: Arc::new(data),
-            weights,
-        }
-    }
-
-    pub fn with_weights(&self, weights: Vec<f64>) -> Dataset {
-        Dataset {
-            data: self.data.clone(),
-            weights,
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
-    }
-
-    pub fn output_size(&self) -> Option<usize> {
-        self.data.first().map(|sample| sample.mask().0.len())
-    }
-
-    pub fn empty_dimensions(&self) -> Vec<usize> {
-        let Some(n_dimensions) = self.data.first().map(|sample| sample.mask().0.len()) else {
-            return vec![]
-        };
-        let new_mask = || BitVec::from_elem(n_dimensions, false);
-        let poormans_or = |mut this: BitVec, other: &BitVec| {
-            for (position, is_selected) in other.iter().enumerate() {
-                if is_selected {
-                    this.set(position, true);
-                }
-            }
-            this
-        };
-
-        let is_not_empty_dimension = self
-            .data
-            .par_iter()
-            .fold(&new_mask, |buffer, sample| {
-                poormans_or(buffer, &sample.mask().0)
-            })
-            .reduce(&new_mask, |this, other| poormans_or(this, &other));
-
-        is_not_empty_dimension
-            .into_iter()
-            .enumerate()
-            .filter(|(_, is_not_empty)| !is_not_empty)
-            .map(|(dimension, _)| dimension)
-            .collect()
-    }
-}
-
+/// A PPCA model which can infer missing values.
+/// 
+/// Eeach sample for this model behaves according to the following
+/// statistical latent variable model.
+/// ```
+/// x ~ N(0; I(nxn))
+/// y = C * x + y0 + noise
+/// noise ~ N(0; sgima ^ 2 * I(mxm))
+/// ```
+/// Here, `x` is the latent state, y is the observed sample, that is an affine
+/// transformation of the hidden state contaminated by isotropic noise.
+///
+/// ## Note
+///
+/// All arrays involved have to be of data type `float64`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PPCAModel {
     output_covariance: OutputCovariance<'static>,
@@ -193,6 +46,9 @@ impl PPCAModel {
         }
     }
 
+    /// Creates a new random __untrained__ model from a given latent state size, a dataset and a
+    /// smoothing factor. The smoothing factor helps with overfit of rarely occuring dimensions. If
+    /// you don't care about that, set it to `0.0`.
     pub fn init(state_size: usize, dataset: &Dataset, smoothing_factor: f64) -> PPCAModel {
         assert!(!dataset.is_empty());
         let output_size = dataset.output_size().expect("dataset is not empty");
@@ -215,22 +71,32 @@ impl PPCAModel {
         }
     }
 
-    pub(crate) fn output_covariance(&self) -> &OutputCovariance<'static> {
-        &self.output_covariance
-    }
-
-    pub(crate) fn mean(&self) -> &DVector<f64> {
+    /// Then center of mass of the distribution in the output space.
+    pub fn mean(&self) -> &DVector<f64> {
         &self.mean
     }
 
+    /// The standard deviation of the noise in the output space.
+    pub fn isotropic_noise(&self) -> f64 {
+        self.output_covariance.isotropic_noise
+    }
+
+    /// The linear transformation from hidden state space to output space.
+    pub fn transform(&self) -> &DMatrix<f64> {
+        &self.output_covariance.transform
+    }
+
+    /// The number of features for this model.
     pub fn output_size(&self) -> usize {
         self.output_covariance.output_size()
     }
 
+    /// The number of hidden values for this model.
     pub fn state_size(&self) -> usize {
         self.output_covariance.state_size()
     }
 
+    /// Creates a zeroed `InferredMasked` struct that is conpatible with this model.
     fn uninferred(&self) -> InferredMasked {
         InferredMasked {
             state: DVector::zeros(self.state_size()),
@@ -238,10 +104,13 @@ impl PPCAModel {
         }
     }
 
+    /// The total number of parameters involved in training (used for information criteria).
     pub fn n_parameters(&self) -> usize {
         1 + self.state_size() * self.output_size() + self.mean.nrows()
     }
 
+    /// The relative strength of each hidden variable on the output. This is equivalent to the
+    /// eigenvalues in the standard PCA.
     pub fn singular_values(&self) -> DVector<f64> {
         self.output_covariance
             .transform
@@ -251,7 +120,8 @@ impl PPCAModel {
             .into()
     }
 
-    pub(crate) fn llk_one(&self, sample: &MaskedSample) -> f64 {
+    /// Compute the log-likelihood of a single sample.
+    pub fn llk_one(&self, sample: &MaskedSample) -> f64 {
         let sample = if !sample.is_empty() {
             sample
         } else {
@@ -268,6 +138,7 @@ impl PPCAModel {
         llk
     }
 
+    /// Compute the log-likelihood of a given dataset.
     pub fn llk(&self, dataset: &Dataset) -> f64 {
         dataset
             .data
@@ -277,6 +148,7 @@ impl PPCAModel {
             .sum()
     }
 
+    /// Compute the log-likelihood for each sample in a given dataset.
     pub fn llks(&self, dataset: &Dataset) -> DVector<f64> {
         dataset
             .data
@@ -286,7 +158,10 @@ impl PPCAModel {
             .into()
     }
 
-    pub(crate) fn sample_one(&self, mask_prob: f64) -> MaskedSample {
+    /// Sample a single sample from the PPCA model and masks each entry according to a
+    /// Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+    /// generated value.
+    pub fn sample_one(&self, mask_prob: f64) -> MaskedSample {
         let sampled_state: DVector<f64> =
             &*self.output_covariance.transform * standard_noise(self.state_size()) + &self.mean;
         let noise: DVector<f64> =
@@ -305,6 +180,9 @@ impl PPCAModel {
         }
     }
 
+    /// Sample a full dataset from the PPCA model and masks each entry according to a
+    /// Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+    /// generated value.
     pub fn sample(&self, dataset_size: usize, mask_prob: f64) -> Dataset {
         (0..dataset_size)
             .into_par_iter()
@@ -312,7 +190,9 @@ impl PPCAModel {
             .collect()
     }
 
-    pub(crate) fn infer_one(&self, sample: &MaskedSample) -> InferredMasked {
+    /// Infers the hidden components for one single sample. Use this method for
+    /// fine-grain control on the properties you want to extract from the model.
+    pub fn infer_one(&self, sample: &MaskedSample) -> InferredMasked {
         if sample.is_empty() {
             return self.uninferred();
         }
@@ -326,6 +206,8 @@ impl PPCAModel {
         }
     }
 
+    /// Infers the hidden components for each sample in the dataset. Use this method for
+    /// fine-grain control on the properties you want to extract from the model.
     pub fn infer(&self, dataset: &Dataset) -> Vec<InferredMasked> {
         dataset
             .data
@@ -334,10 +216,14 @@ impl PPCAModel {
             .collect()
     }
 
-    pub(crate) fn smooth_one(&self, sample: &MaskedSample) -> MaskedSample {
+    /// Filters a single samples, removing noise from the extant samples and
+    /// inferring the missing samples.
+    pub fn smooth_one(&self, sample: &MaskedSample) -> MaskedSample {
         MaskedSample::unmasked(self.infer_one(sample).smoothed(&self))
     }
 
+    /// Filters each sample of a given datatset, removing noise from the extant samples and
+    /// inferring the missing samples.
     pub fn smooth(&self, dataset: &Dataset) -> Dataset {
         dataset
             .data
@@ -347,10 +233,14 @@ impl PPCAModel {
             .collect()
     }
 
-    pub(crate) fn extrapolate_one(&self, sample: &MaskedSample) -> MaskedSample {
+    /// Extrapolates the missing values with the most probable values for a single sample. This
+    /// method does not alter the extant values.
+    pub fn extrapolate_one(&self, sample: &MaskedSample) -> MaskedSample {
         MaskedSample::unmasked(self.infer_one(sample).extrapolated(self, sample))
     }
 
+    /// Extrapolates the missing values with the most probable values for a full dataset. This
+    /// method does not alter the extant values.
     pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
         dataset
             .data
@@ -360,6 +250,9 @@ impl PPCAModel {
             .collect()
     }
 
+    /// Makes one iteration of the EM algorithm for the PPCA over an observed dataset,
+    /// returning the improved model. The log-likelihood will **always increase** for the returned
+    /// model.
     #[must_use]
     pub fn iterate(&self, dataset: &Dataset) -> PPCAModel {
         let inferred = self.infer(dataset);
@@ -455,6 +348,9 @@ impl PPCAModel {
         }
     }
 
+    /// Returns a canonical version of this model. This does not alter the log-probablility
+    /// function nor the quality of the training. All it does is to transform the hidden
+    /// variables.
     pub fn to_canonical(&self) -> PPCAModel {
         let mut svd = self
             .output_covariance
@@ -480,6 +376,7 @@ impl PPCAModel {
     }
 }
 
+/// The inferred probability distribution in the state space of a given sample.
 #[derive(Debug)]
 pub struct InferredMasked {
     state: DVector<f64>,
@@ -491,23 +388,34 @@ impl InferredMasked {
         &self.state * self.state.transpose() + &self.covariance
     }
 
+    /// The mean of the probability distribution in the state space.
     pub fn state(&self) -> &DVector<f64> {
         &self.state
     }
 
+    /// The covariance matrix of the probability distribution in the state space. The covariances
+    /// here can change from sample to sample, depending on the mask. If there is lots of masking
+    /// in a sample, the covariance will be overall bigger.
     pub fn covariance(&self) -> &DMatrix<f64> {
         &self.covariance
     }
 
+    /// The smoothed output values for a given output model.
     pub fn smoothed(&self, ppca: &PPCAModel) -> DVector<f64> {
         &*ppca.output_covariance.transform * self.state() + &ppca.mean
     }
 
+    /// The extrapolated output values for a given output model and extant values in a given
+    /// sample.
     pub fn extrapolated(&self, ppca: &PPCAModel, sample: &MaskedSample) -> DVector<f64> {
         let filtered = self.smoothed(&ppca);
         sample.mask.choose(&sample.data_vector(), &filtered)
     }
 
+    /// The covariance for the smoothed output values.
+    /// 
+    /// # Note:
+    /// 
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn smoothed_covariance(&self, ppca: &PPCAModel) -> DMatrix<f64> {
@@ -518,6 +426,11 @@ impl InferredMasked {
             + &*covariance.transform * &self.covariance * covariance.transform.transpose()
     }
 
+    /// Returns an _approximation_ of the smoothed output covariance matrix, treating each masked
+    /// output as an independent normal distribution.
+    /// 
+    /// # Note:
+    /// 
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
     pub fn smoothed_covariance_diagonal(&self, ppca: &PPCAModel) -> DVector<f64> {
         // Here, we will calculate `I sigma^2 + C Sxx C^T` for the unobserved samples in a
@@ -544,6 +457,11 @@ impl InferredMasked {
             .into()
     }
 
+    /// The covariance for the extraplated values for a given output model and extant values in a given
+    /// sample.
+    /// 
+    /// # Note:
+    /// 
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn extrapolated_covariance(&self, ppca: &PPCAModel, sample: &MaskedSample) -> DMatrix<f64> {
@@ -565,6 +483,11 @@ impl InferredMasked {
         negative.expand_matrix(output_covariance)
     }
 
+    /// Returns an _approximation_ of the extrapolated output covariance matrix, treating each masked
+    /// output as an independent normal distribution.
+    /// 
+    /// # Note
+    ///
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
     pub fn extrapolated_covariance_diagonal(
         &self,

@@ -3,7 +3,8 @@ use rand_distr::{Distribution, WeightedIndex};
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::ppca_model::{Dataset, InferredMasked, MaskedSample, PPCAModel};
+use crate::ppca_model::{InferredMasked, PPCAModel};
+use crate::dataset::{Dataset, MaskedSample};
 
 /// Performs Bayesian inference in the log domain.
 fn robust_log_softmax(data: DVector<f64>) -> DVector<f64> {
@@ -19,6 +20,18 @@ fn robust_log_softnorm(data: DVector<f64>) -> f64 {
     max + log_norm
 }
 
+/// A mixture of PPCA models. Each PPCA model is associated with a prior probability
+/// expressed in log-scale. This models allows for modelling of data clustering and
+/// non-linear learning of data. However, it will use significantly more memory and is
+/// not guaranteed to converge to a global maximum.
+/// 
+/// # Notes
+/// 
+/// * The list of log-weights does not need to be normalized. Normalization is carried out
+/// internally.
+/// * Each PPCA model in the mixture might have its own state size. However, all PPCA
+/// models must have the same output space. Additionally, the set of PPCA models must be
+/// non-empty.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PPCAMix {
     output_size: usize,
@@ -50,6 +63,9 @@ impl PPCAMix {
         }
     }
 
+    /// Creates a new random __untrained__ model from a given number of PPCA modes, a latent state
+    /// size, a dataset and a smoothing factor. The smoothing factor helps with overfit of rarely
+    /// occuring dimensions. If you don't care about that, set it to `0.0`.
     pub fn init(n_models: usize, state_size: usize, dataset: &Dataset, smoothing_factor: f64) -> PPCAMix {
         PPCAMix::new(
             (0..n_models)
@@ -59,14 +75,17 @@ impl PPCAMix {
         )
     }
 
+    /// The number of features for this model.
     pub fn output_size(&self) -> usize {
         self.output_size
     }
 
+    /// The number of hidden values for each PPCA model.
     pub fn state_sizes(&self) -> Vec<usize> {
         self.models.iter().map(PPCAModel::state_size).collect()
     }
 
+    /// The total number of parameters involved in training (used for information criteria).
     pub fn n_parameters(&self) -> usize {
         self.models
             .iter()
@@ -76,14 +95,19 @@ impl PPCAMix {
             - 1
     }
 
+    /// The list of constituent PPCA models.
     pub fn models(&self) -> &[PPCAModel] {
         &self.models
     }
 
+    /// The strength (or _a priori_ probablilty) for each PPCA model.
     pub fn log_weights(&self) -> &DVector<f64> {
         &self.log_weights
     }
 
+    /// Sample a full dataset from the PPCA model and masks each entry according to a
+    /// Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+    /// generated value.
     pub fn sample(&self, dataset_size: usize, mask_probability: f64) -> Dataset {
         let index = WeightedIndex::new(self.log_weights.iter().copied().map(f64::exp))
             .expect("can create WeigtedIndex from distribution");
@@ -96,6 +120,7 @@ impl PPCAMix {
             .collect()
     }
 
+    /// Computes the log-likelihood for each constituent PPCA model.
     pub(crate) fn llks_one(&self, sample: &MaskedSample) -> DVector<f64> {
         self.models
             .iter()
@@ -104,15 +129,22 @@ impl PPCAMix {
             .into()
     }
 
+    /// Computes the log-likelihood for a single sample.
+    pub fn llk_one(&self, sample: &MaskedSample) -> f64 {
+        robust_log_softnorm(self.llks_one(sample) + &self.log_weights)
+    }
+
+    /// Computes the log-likelihood for each sample in a dataset.
     pub fn llks(&self, dataset: &Dataset) -> DVector<f64> {
         dataset
             .data
             .par_iter()
-            .map(|sample| robust_log_softnorm(self.llks_one(sample) + &self.log_weights))
+            .map(|sample| self.llk_one(sample))
             .collect::<Vec<_>>()
             .into()
     }
 
+    /// Computes the total log-likelihood for a given dataset.
     pub fn llk(&self, dataset: &Dataset) -> f64 {
         // Rayon doesn't like to sum empty stuff...
         if dataset.is_empty() {
@@ -124,11 +156,14 @@ impl PPCAMix {
             .par_iter()
             .zip(&dataset.weights)
             .map(|(sample, &weight)| {
-                weight * robust_log_softnorm(self.llks_one(sample) + &self.log_weights)
+                weight * self.llk_one(sample)
             })
             .sum::<f64>()
     }
 
+    /// Returns the _posterior_ distribution (i.e., with Baye's rule applied) for each sample in
+    /// the given dataset. Each row of the matrix corresponds to a categorical distribution on the
+    /// probability of a sample belonging to a particular PPCA model.
     pub fn infer_cluster(&self, dataset: &Dataset) -> DMatrix<f64> {
         let rows: Vec<_> = dataset
             .data
@@ -139,6 +174,7 @@ impl PPCAMix {
         DMatrix::from_rows(&*rows)
     }
 
+    /// Infers the probability distribution of a single sample.
     pub(crate) fn infer_one(&self, sample: &MaskedSample) -> InferredMaskedMix {
         InferredMaskedMix {
             log_posterior: robust_log_softmax(self.llks_one(sample) + &self.log_weights),
@@ -150,6 +186,7 @@ impl PPCAMix {
         }
     }
 
+    /// Infers the probability distribution of a given dataset.
     pub fn infer(&self, dataset: &Dataset) -> Vec<InferredMaskedMix> {
         dataset
             .data
@@ -158,6 +195,8 @@ impl PPCAMix {
             .collect()
     }
 
+    /// Filters a dataset of samples, removing noise from the extant samples and
+    /// inferring the missing samples.
     pub fn smooth(&self, dataset: &Dataset) -> Dataset {
         let smooths = self
             .models
@@ -180,6 +219,7 @@ impl PPCAMix {
             .collect()
     }
 
+    /// Extrapolates the missing values with the most probable values.
     pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
         let exrapolated = self
             .models
@@ -202,6 +242,9 @@ impl PPCAMix {
             .collect()
     }
 
+    /// Makes one iteration of the EM algorithm for the PPCA mixture model over an
+    /// observed dataset, returning a improved model. The log-likelihood will **always increase**
+    /// for the returned model.
     pub fn iterate(&self, dataset: &Dataset) -> PPCAMix {
         // This is already parallelized internally; no need to further parallelize.
         let llks = self
@@ -253,6 +296,7 @@ impl PPCAMix {
         }
     }
 
+    /// Maps [`PPCAModel::to_canonical`] for each constituent model.
     pub fn to_canonical(&self) -> PPCAMix {
         PPCAMix {
             output_size: self.output_size,
@@ -262,20 +306,26 @@ impl PPCAMix {
     }
 }
 
+
+/// The inferred probability distribution in the state space of a given sample of a PPCA Mixture
+/// Model. This class is the analogous of [`InferredMasked`] for the [`PPCAMix`] model.
 pub struct InferredMaskedMix {
     log_posterior: DVector<f64>,
     inferred: Vec<InferredMasked>,
 }
 
 impl InferredMaskedMix {
+    /// The logarithm of the posterior distribution over the PPCA model indices.
     pub fn log_posterior(&self) -> &DVector<f64> {
         &self.log_posterior
     }
 
+    /// The posterior distribution over the PPCA model indices.
     pub fn posterior(&self) -> DVector<f64> {
         self.log_posterior.map(f64::exp)
     }
 
+    /// The mean of the posterior distribution in the state space.
     pub fn state(&self) -> DVector<f64> {
         self.log_posterior
             .iter()
@@ -284,6 +334,7 @@ impl InferredMaskedMix {
             .sum()
     }
 
+    /// The covariance matrices of the posterion distribution in the state space.
     pub fn covariance(&self) -> DMatrix<f64> {
         let mean = self.state();
         self.inferred
@@ -297,6 +348,7 @@ impl InferredMaskedMix {
             .sum::<DMatrix<f64>>()
     }
 
+    /// The smoothed output values for a given output model.
     pub fn smoothed(&self, mix: &PPCAMix) -> DVector<f64> {
         self.inferred
             .iter()
@@ -306,6 +358,7 @@ impl InferredMaskedMix {
             .sum::<DVector<f64>>()
     }
 
+    /// The extrapolated output values for a given output model and the corresponding sample.
     pub fn extrapolated(&self, mix: &PPCAMix, sample: &MaskedSample) -> DVector<f64> {
         self.inferred
             .iter()
@@ -315,6 +368,13 @@ impl InferredMaskedMix {
             .sum::<DVector<f64>>()
     }
 
+    
+    /// The covariance for the smoothed output values.
+    /// 
+    /// # Note:
+    /// 
+    /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
+    /// save your life.
     pub fn smoothed_covariance(&self, mix: &PPCAMix) -> DMatrix<f64> {
         let mean = self.smoothed(mix);
         self.inferred
@@ -330,6 +390,12 @@ impl InferredMaskedMix {
             .sum::<DMatrix<f64>>()
     }
 
+    /// Returns an _approximation_ of the smoothed output covariance matrix, treating each masked
+    /// output as an independent normal distribution.
+    /// 
+    /// # Note:
+    /// 
+    /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
     pub fn smoothed_covariance_diagonal(&self, mix: &PPCAMix) -> DVector<f64> {
         let mean = self.smoothed(mix);
         self.inferred
@@ -344,6 +410,13 @@ impl InferredMaskedMix {
             .sum()
     }
 
+    /// The covariance for the extraplated values for a given output model and extant values in a given
+    /// sample.
+    /// 
+    /// # Note:
+    /// 
+    /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
+    /// save your life.
     pub fn extrapolated_covariance(&self, mix: &PPCAMix, sample: &MaskedSample) -> DMatrix<f64> {
         let mean = self.extrapolated(mix, sample).clone();
         self.inferred
@@ -359,6 +432,12 @@ impl InferredMaskedMix {
             .sum::<DMatrix<f64>>()
     }
 
+    /// Returns an _approximation_ of the extrapolated output covariance matrix, treating each masked
+    /// output as an independent normal distribution.
+    /// 
+    /// # Note
+    ///
+    /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
     pub fn extrapolated_covariance_diagonal(
         &self,
         mix: &PPCAMix,

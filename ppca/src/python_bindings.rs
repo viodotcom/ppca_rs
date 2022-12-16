@@ -1,9 +1,17 @@
+use bit_vec::BitVec;
 use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
-use pyo3::{prelude::*, types::PyBytes};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes},
+};
 use rayon::prelude::*;
 
-use ppca::{Dataset, InferredMasked, InferredMaskedMix, MaskedSample, PPCAMix, PPCAModel};
+use crate::{
+    mix::{InferredMaskedMix, PPCAMix},
+    ppca_model::{Dataset, InferredMasked, MaskedSample, PPCAModel},
+    utils::Mask,
+};
 
 /// This module is implemented in Rust.
 #[pymodule]
@@ -34,7 +42,10 @@ impl DatasetWrapper {
             (0..n_samples)
                 .map(|sample_id| {
                     let data = iter_sample(sample_id).collect::<Vec<_>>().into();
-                    MaskedSample::mask_non_finite(data)
+                    let mask = iter_sample(sample_id)
+                        .map(f64::is_finite)
+                        .collect::<BitVec>();
+                    MaskedSample::new(data, Mask(mask))
                 })
                 .collect()
         });
@@ -266,7 +277,7 @@ struct PPCAModelWrapper(PPCAModel);
 #[pymethods]
 impl PPCAModelWrapper {
     #[new]
-    #[args(smoothing_factor = "0f64")]
+    #[args(smoothing_factor="0f64")]
     fn new(
         py: Python<'_>,
         isotropic_noise: f64,
@@ -342,12 +353,16 @@ impl PPCAModelWrapper {
 
     #[getter]
     fn transform(&self, py: Python<'_>) -> Py<PyArray2<f64>> {
-        self.0.transform().to_pyarray(py).to_owned()
+        self.0
+            .output_covariance()
+            .transform
+            .to_pyarray(py)
+            .to_owned()
     }
 
     #[getter]
     fn isotropic_noise(&self) -> f64 {
-        self.0.isotropic_noise()
+        self.0.output_covariance().isotropic_noise
     }
 
     #[getter]
@@ -362,12 +377,8 @@ impl PPCAModelWrapper {
     }
 
     #[staticmethod]
-    #[args(smoothing_factor = "0f64")]
-    fn init(
-        state_size: usize,
-        dataset: &DatasetWrapper,
-        smoothing_factor: f64,
-    ) -> PPCAModelWrapper {
+    #[args(smoothing_factor="0f64")]
+    fn init(state_size: usize, dataset: &DatasetWrapper, smoothing_factor: f64) -> PPCAModelWrapper {
         PPCAModelWrapper(PPCAModel::init(state_size, &dataset.0, smoothing_factor))
     }
 
@@ -470,7 +481,7 @@ impl PPCAMixWrapper {
     }
 
     #[staticmethod]
-    #[args(smoothing_factor = "0f64")]
+    #[args(smoothing_factor="0f64")]
     fn init(
         py: Python,
         n_models: usize,
@@ -478,14 +489,7 @@ impl PPCAMixWrapper {
         dataset: &DatasetWrapper,
         smoothing_factor: f64,
     ) -> PPCAMixWrapper {
-        py.allow_threads(|| {
-            PPCAMixWrapper(PPCAMix::init(
-                n_models,
-                state_size,
-                &dataset.0,
-                smoothing_factor,
-            ))
-        })
+        py.allow_threads(|| PPCAMixWrapper(PPCAMix::init(n_models, state_size, &dataset.0, smoothing_factor)))
     }
 
     #[staticmethod]
