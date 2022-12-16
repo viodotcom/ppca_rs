@@ -12,7 +12,7 @@ keywords = [
     "data-science",
     "machine-learning",
     "pca",
-    "dimensionality-reduction",
+    "dimension-reduction",
     "missing-values",
 ]
 categories = ["algorithms", "data-structures", "mathematics"]
