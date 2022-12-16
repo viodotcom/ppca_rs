@@ -9,10 +9,8 @@ homepage = "https://github.com/findHotel/ppca_rs"
 repository = "https://github.com/findHotel/ppca_rs"
 license-file = "./license"
 keywords = [
-    "statistics",
     "data-science",
     "machine-learning",
-    "linear-algebra",
     "pca",
     "dimensionality-reduction",
     "missing-values",
