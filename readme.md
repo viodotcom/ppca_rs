@@ -2,6 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/ppca-rs.svg)](https://badge.fury.io/py/ppca-rs)
 [![Crates.io version](https://img.shields.io/crates/v/ppca)](https://crates.io/crates/ppca)
+[![Docs.rs version](https://img.shields.io/docsrs/ppca)](https://docs.rs/ppca)
 
 This project implements a PPCA model implemented in Rust for Python using `pyO3` and `maturin`.
 
