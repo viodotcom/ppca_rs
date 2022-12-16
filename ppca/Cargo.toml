@@ -15,7 +15,7 @@ keywords = [
     "linear-algebra",
     "pca",
     "dimensionality-reduction",
-    "missing values",
+    "missing-values",
 ]
 categories = ["algorithms", "data-structures", "mathematics"]
 
