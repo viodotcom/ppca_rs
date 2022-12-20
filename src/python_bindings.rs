@@ -6,7 +6,7 @@ use rayon::prelude::*;
 
 use ppca::{
     Dataset, InferredMasked, InferredMaskedMix, MaskedSample, PPCAMix, PPCAModel,
-    SamplePosteriorMix, SamplePosterior,
+    PosteriorSamplerMix, PosteriorSampler,
 };
 
 /// This module is implemented in Rust.
@@ -15,10 +15,10 @@ pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PPCAModelWrapper>()?;
     m.add_class::<DatasetWrapper>()?;
     m.add_class::<InferredMaskedBatch>()?;
-    m.add_class::<SamplePosteriorBatch>()?;
+    m.add_class::<PosteriorSamplerBatch>()?;
     m.add_class::<PPCAMixWrapper>()?;
     m.add_class::<InferredMaskedMixBatch>()?;
-    m.add_class::<SamplePosteriorMixBatch>()?;
+    m.add_class::<PosteriorSamplerMixBatch>()?;
     Ok(())
 }
 
@@ -279,27 +279,27 @@ impl InferredMaskedBatch {
         DatasetWrapper(output_covariances_diagonal)
     }
 
-    fn sample_posterior(&self, py: Python) -> SamplePosteriorBatch {
+    fn posterior_sampler(&self, py: Python) -> PosteriorSamplerBatch {
         let posteriors = py.allow_threads(|| {
             self.data
                 .par_iter()
-                .map(|sample| sample.sample_posterior())
+                .map(|sample| sample.posterior_sampler())
                 .collect::<Vec<_>>()
         });
 
-        SamplePosteriorBatch { posteriors }
+        PosteriorSamplerBatch { posteriors }
     }
 }
 
 #[pyclass]
-#[pyo3(name = "SamplePosterior", module = "ppca_rs")]
-struct SamplePosteriorBatch {
-    posteriors: Vec<SamplePosterior>,
+#[pyo3(name = "PosteriorSampler", module = "ppca_rs")]
+struct PosteriorSamplerBatch {
+    posteriors: Vec<PosteriorSampler>,
 }
 
 #[pymethods]
-impl SamplePosteriorBatch {
-    fn sample_posterior(&self, py: Python) -> DatasetWrapper {
+impl PosteriorSamplerBatch {
+    fn sample(&self, py: Python) -> DatasetWrapper {
         let samples = py.allow_threads(|| {
             self.posteriors
                 .par_iter()
@@ -837,27 +837,27 @@ impl InferredMaskedMixBatch {
         DatasetWrapper(output_covariances_diagonal)
     }
 
-    fn sample_posterior(&self, py: Python) -> SamplePosteriorMixBatch {
+    fn posterior_sampler(&self, py: Python) -> PosteriorSamplerMixBatch {
         let posteriors = py.allow_threads(|| {
             self.data
                 .par_iter()
-                .map(|sample| sample.sample_posterior())
+                .map(|sample| sample.posterior_sampler())
                 .collect::<Vec<_>>()
         });
 
-        SamplePosteriorMixBatch { posteriors }
+        PosteriorSamplerMixBatch { posteriors }
     }
 }
 
 #[pyclass]
-#[pyo3(name = "SamplePosteriorMix", module = "ppca_rs")]
-struct SamplePosteriorMixBatch {
-    posteriors: Vec<SamplePosteriorMix>,
+#[pyo3(name = "PosteriorSamplerMix", module = "ppca_rs")]
+struct PosteriorSamplerMixBatch {
+    posteriors: Vec<PosteriorSamplerMix>,
 }
 
 #[pymethods]
-impl SamplePosteriorMixBatch {
-    fn sample_posterior(&self, py: Python) -> DatasetWrapper {
+impl PosteriorSamplerMixBatch {
+    fn posterior_sampler(&self, py: Python) -> DatasetWrapper {
         let samples = py.allow_threads(|| {
             self.posteriors
                 .par_iter()

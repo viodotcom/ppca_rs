@@ -533,27 +533,29 @@ impl InferredMasked {
         negative.expand(&diagonal_reduced)
     }
 
-    /// Samples from the posterior distribution of an infered sample.
-    pub fn sample_posterior(&self) -> SamplePosterior {
+    /// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+    /// is, it does not include the model isotropic noise.
+    pub fn posterior_sampler(&self) -> PosteriorSampler {
         let cholesky = self
             .covariance
             .clone()
             .cholesky()
             .expect("Cholesky decomposition failed");
-        SamplePosterior {
+        PosteriorSampler {
             state: self.state.clone(),
             cholesky_l: cholesky.l(),
         }
     }
 }
 
-/// Samples from the posterior distribution of an infered sample.
-pub struct SamplePosterior {
+/// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+/// is, it does not include the model isotropic noise.
+pub struct PosteriorSampler {
     state: DVector<f64>,
     cholesky_l: DMatrix<f64>,
 }
 
-impl Distribution<DVector<f64>> for SamplePosterior {
+impl Distribution<DVector<f64>> for PosteriorSampler {
     fn sample<R>(&self, rng: &mut R) -> DVector<f64>
     where
         R: Rng + ?Sized,

@@ -445,26 +445,28 @@ impl InferredMaskedMix {
             .sum()
     }
 
-    /// Samples from the posterior distribution of an infered sample.
-    pub fn sample_posterior(&self) -> SamplePosteriorMix {
+    /// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+    /// is, it does not include the model isotropic noise.
+    pub fn posterior_sampler(&self) -> PosteriorSamplerMix {
         let index = WeightedIndex::new(self.posterior().iter().copied())
             .expect("failed to create WeightedIndex for posterior");
         let posteriors = self
             .inferred
             .iter()
-            .map(InferredMasked::sample_posterior)
+            .map(InferredMasked::posterior_sampler)
             .collect::<Vec<_>>();
-        SamplePosteriorMix { index, posteriors }
+        PosteriorSamplerMix { index, posteriors }
     }
 }
 
-/// Samples from the posterior distribution of an infered sample.
-pub struct SamplePosteriorMix {
+/// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+/// is, it does not include the model isotropic noise.
+pub struct PosteriorSamplerMix {
     index: WeightedIndex<f64>,
-    posteriors: Vec<ppca_model::SamplePosterior>,
+    posteriors: Vec<ppca_model::PosteriorSampler>,
 }
 
-impl Distribution<DVector<f64>> for SamplePosteriorMix {
+impl Distribution<DVector<f64>> for PosteriorSamplerMix {
     fn sample<R>(&self, rng: &mut R) -> DVector<f64>
     where
         R: Rng + ?Sized,
