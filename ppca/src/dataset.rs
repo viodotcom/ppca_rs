@@ -2,11 +2,12 @@ use bit_vec::BitVec;
 use nalgebra::DVector;
 use rayon::prelude::*;
 use std::sync::Arc;
+use serde_derive::{Serialize, Deserialize};
 
 use crate::utils::Mask;
 
 /// A data sample with potentially missing values.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaskedSample {
     pub(crate) data: DVector<f64>,
     pub(crate) mask: Mask,
@@ -68,7 +69,7 @@ impl MaskedSample {
 /// ## Note
 ///
 /// All arrays involved have to be of data type `float64`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dataset {
     /// The data rows of this dataset.
     pub data: Arc<Vec<MaskedSample>>,

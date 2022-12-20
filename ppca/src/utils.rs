@@ -2,6 +2,7 @@ use bit_vec::BitVec;
 use nalgebra::{DMatrix, DVector};
 use rand::distributions::Distribution;
 use rand_distr::StandardNormal;
+use serde_derive::{Serialize, Deserialize};
 
 pub(crate) fn standard_noise(size: usize) -> DVector<f64> {
     DVector::from(
@@ -23,7 +24,7 @@ pub(crate) fn standard_noise_matrix(rows: usize, cols: usize) -> DMatrix<f64> {
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mask(pub BitVec);
 
 impl Mask {

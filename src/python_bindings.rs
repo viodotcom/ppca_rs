@@ -1,9 +1,13 @@
 use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{prelude::*, types::PyBytes};
+use rand_distr::Distribution;
 use rayon::prelude::*;
 
-use ppca::{Dataset, InferredMasked, InferredMaskedMix, MaskedSample, PPCAMix, PPCAModel};
+use ppca::{
+    Dataset, InferredMasked, InferredMaskedMix, MaskedSample, PPCAMix, PPCAModel,
+    SamplePosteriorMix, SamplePosterior,
+};
 
 /// This module is implemented in Rust.
 #[pymodule]
@@ -11,8 +15,10 @@ pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PPCAModelWrapper>()?;
     m.add_class::<DatasetWrapper>()?;
     m.add_class::<InferredMaskedBatch>()?;
+    m.add_class::<SamplePosteriorBatch>()?;
     m.add_class::<PPCAMixWrapper>()?;
     m.add_class::<InferredMaskedMixBatch>()?;
+    m.add_class::<SamplePosteriorMixBatch>()?;
     Ok(())
 }
 
@@ -40,6 +46,22 @@ impl DatasetWrapper {
         });
 
         Ok(DatasetWrapper(Dataset::new(data)))
+    }
+
+
+    #[staticmethod]
+    fn load(bytes: &PyBytes) -> PyResult<DatasetWrapper> {
+        Ok(DatasetWrapper(
+            bincode::deserialize(bytes.as_bytes())
+                .map_err(|err| pyo3::exceptions::PyException::new_err(err.to_string()))?,
+        ))
+    }
+
+    fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
+        PyBytes::new(
+            py,
+            &bincode::serialize(&self.0).expect("can always serialize PPCA model"),
+        )
     }
 
     fn numpy(&self, py: Python) -> Py<PyArray2<f64>> {
@@ -256,7 +278,39 @@ impl InferredMaskedBatch {
 
         DatasetWrapper(output_covariances_diagonal)
     }
+
+    fn sample_posterior(&self, py: Python) -> SamplePosteriorBatch {
+        let posteriors = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .map(|sample| sample.sample_posterior())
+                .collect::<Vec<_>>()
+        });
+
+        SamplePosteriorBatch { posteriors }
+    }
 }
+
+#[pyclass]
+#[pyo3(name = "SamplePosterior", module = "ppca_rs")]
+struct SamplePosteriorBatch {
+    posteriors: Vec<SamplePosterior>,
+}
+
+#[pymethods]
+impl SamplePosteriorBatch {
+    fn sample_posterior(&self, py: Python) -> DatasetWrapper {
+        let samples = py.allow_threads(|| {
+            self.posteriors
+                .par_iter()
+                .map(|sample| MaskedSample::unmasked(sample.sample(&mut rand::thread_rng())))
+                .collect::<Dataset>()
+        });
+
+        DatasetWrapper(samples)
+    }
+}
+
 
 #[pyclass]
 #[pyo3(name = "PPCAModel", module = "ppca_rs")]
@@ -781,6 +835,37 @@ impl InferredMaskedMixBatch {
         });
 
         DatasetWrapper(output_covariances_diagonal)
+    }
+
+    fn sample_posterior(&self, py: Python) -> SamplePosteriorMixBatch {
+        let posteriors = py.allow_threads(|| {
+            self.data
+                .par_iter()
+                .map(|sample| sample.sample_posterior())
+                .collect::<Vec<_>>()
+        });
+
+        SamplePosteriorMixBatch { posteriors }
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "SamplePosteriorMix", module = "ppca_rs")]
+struct SamplePosteriorMixBatch {
+    posteriors: Vec<SamplePosteriorMix>,
+}
+
+#[pymethods]
+impl SamplePosteriorMixBatch {
+    fn sample_posterior(&self, py: Python) -> DatasetWrapper {
+        let samples = py.allow_threads(|| {
+            self.posteriors
+                .par_iter()
+                .map(|sample| MaskedSample::unmasked(sample.sample(&mut rand::thread_rng())))
+                .collect::<Dataset>()
+        });
+
+        DatasetWrapper(samples)
     }
 }
 

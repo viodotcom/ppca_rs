@@ -1,6 +1,7 @@
 use bit_vec::BitVec;
 use nalgebra::{DMatrix, DVector};
 use rand::distributions::Distribution;
+use rand::Rng;
 use rand_distr::Bernoulli;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
@@ -530,6 +531,38 @@ impl InferredMasked {
             .into();
 
         negative.expand(&diagonal_reduced)
+    }
+
+    /// Samples from the posterior distribution of an infered sample.
+    pub fn sample_posterior(&self) -> SamplePosterior {
+        let cholesky = self
+            .covariance
+            .clone()
+            .cholesky()
+            .expect("Cholesky decomposition failed");
+        SamplePosterior {
+            state: self.state.clone(),
+            cholesky_l: cholesky.l(),
+        }
+    }
+}
+
+/// Samples from the posterior distribution of an infered sample.
+pub struct SamplePosterior {
+    state: DVector<f64>,
+    cholesky_l: DMatrix<f64>,
+}
+
+impl Distribution<DVector<f64>> for SamplePosterior {
+    fn sample<R>(&self, rng: &mut R) -> DVector<f64>
+    where
+        R: Rng + ?Sized,
+    {
+        let standard: DVector<f64> = (0..self.state.len())
+            .map(|_| rand_distr::StandardNormal.sample(rng))
+            .collect::<Vec<_>>()
+            .into();
+        &self.state + &self.cholesky_l * standard
     }
 }
 

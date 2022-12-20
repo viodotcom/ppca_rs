@@ -22,12 +22,12 @@ categories = ["algorithms", "data-structures", "mathematics"]
 [dependencies]
 
 approx = "0.5.1"
-bit-vec = "0.6.3"
+bit-vec = { version = "0.6.3", features = ["serde"] }
 nalgebra = { version = "0.31.2", features = ["serde-serialize"] }
 rand = "0.8.5"
 rand_distr = "0.4.3"
 rayon = "1.5.3"
 ndarray = "0.15.6"
-serde = "1.0.147"
+serde = { version = "1.0.147", features = ["rc"] }
 serde_derive = "1.0.147"
 ordered-float = "3.4.0"

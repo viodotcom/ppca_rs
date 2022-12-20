@@ -1,10 +1,11 @@
 use nalgebra::{DMatrix, DVector};
+use rand::Rng;
 use rand_distr::{Distribution, WeightedIndex};
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::dataset::{Dataset, MaskedSample};
-use crate::ppca_model::{InferredMasked, PPCAModel};
+use crate::ppca_model::{self, InferredMasked, PPCAModel};
 
 /// Performs Bayesian inference in the log domain.
 fn robust_log_softmax(data: DVector<f64>) -> DVector<f64> {
@@ -442,5 +443,33 @@ impl InferredMaskedMix {
                         + (infered.extrapolated(ppca, sample) - &mean).map(|v| v.powi(2)))
             })
             .sum()
+    }
+
+    /// Samples from the posterior distribution of an infered sample.
+    pub fn sample_posterior(&self) -> SamplePosteriorMix {
+        let index = WeightedIndex::new(self.posterior().iter().copied())
+            .expect("failed to create WeightedIndex for posterior");
+        let posteriors = self
+            .inferred
+            .iter()
+            .map(InferredMasked::sample_posterior)
+            .collect::<Vec<_>>();
+        SamplePosteriorMix { index, posteriors }
+    }
+}
+
+/// Samples from the posterior distribution of an infered sample.
+pub struct SamplePosteriorMix {
+    index: WeightedIndex<f64>,
+    posteriors: Vec<ppca_model::SamplePosterior>,
+}
+
+impl Distribution<DVector<f64>> for SamplePosteriorMix {
+    fn sample<R>(&self, rng: &mut R) -> DVector<f64>
+    where
+        R: Rng + ?Sized,
+    {
+        let posterior = self.index.sample(rng);
+        self.posteriors[posterior].sample(rng)
     }
 }
