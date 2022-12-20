@@ -195,7 +195,6 @@ impl PPCAMix {
     /// Infers the probability distribution of a single sample.
     pub fn infer_one(&self, sample: &MaskedSample) -> InferredMaskedMix {
         InferredMaskedMix {
-            model: self.clone(),
             log_posterior: robust_log_softmax(self.llks_one(sample) + &self.0.log_weights),
             inferred: self
                 .0
