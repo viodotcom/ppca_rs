@@ -1,8 +1,8 @@
 use bit_vec::BitVec;
 use nalgebra::DVector;
 use rayon::prelude::*;
+use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
-use serde_derive::{Serialize, Deserialize};
 
 use crate::utils::Mask;
 

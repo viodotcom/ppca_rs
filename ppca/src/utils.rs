@@ -2,7 +2,7 @@ use bit_vec::BitVec;
 use nalgebra::{DMatrix, DVector};
 use rand::distributions::Distribution;
 use rand_distr::StandardNormal;
-use serde_derive::{Serialize, Deserialize};
+use serde_derive::{Deserialize, Serialize};
 
 pub(crate) fn standard_noise(size: usize) -> DVector<f64> {
     DVector::from(

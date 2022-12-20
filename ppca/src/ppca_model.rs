@@ -6,12 +6,23 @@ use rand_distr::Bernoulli;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::dataset::{Dataset, MaskedSample};
 use crate::output_covariance::OutputCovariance;
 use crate::utils::{standard_noise, standard_noise_matrix, Mask};
 
 const LN_2PI: f64 = 1.8378770664093453;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PPCAModelInner {
+    output_covariance: OutputCovariance<'static>,
+    mean: DVector<f64>,
+    /// A factor to smooth out the `transform` matrix when there is little data for a
+    /// given dimension.
+    #[serde(default)]
+    smoothing_factor: f64,
+}
 
 /// A PPCA model which can infer missing values.
 ///
@@ -29,14 +40,7 @@ const LN_2PI: f64 = 1.8378770664093453;
 ///
 /// All arrays involved have to be of data type `float64`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PPCAModel {
-    output_covariance: OutputCovariance<'static>,
-    mean: DVector<f64>,
-    /// A factor to smooth out the `transform` matrix when there is little data for a
-    /// given dimension.
-    #[serde(default)]
-    smoothing_factor: f64,
-}
+pub struct PPCAModel(Arc<PPCAModelInner>);
 
 impl PPCAModel {
     pub fn new(
@@ -45,11 +49,11 @@ impl PPCAModel {
         mean: DVector<f64>,
         smoothing_factor: f64,
     ) -> PPCAModel {
-        PPCAModel {
+        PPCAModel(Arc::new(PPCAModelInner {
             output_covariance: OutputCovariance::new_owned(isotropic_noise, transform),
             mean,
             smoothing_factor,
-        }
+        }))
     }
 
     /// Creates a new random __untrained__ model from a given latent state size, a dataset and a
@@ -67,44 +71,45 @@ impl PPCAModel {
             }
         }
 
-        PPCAModel {
+        PPCAModel(Arc::new(PPCAModelInner {
             output_covariance: OutputCovariance {
                 isotropic_noise: 1.0,
                 transform: Cow::Owned(rand_transform),
             },
             mean: DVector::zeros(output_size),
             smoothing_factor,
-        }
+        }))
     }
 
     /// Then center of mass of the distribution in the output space.
     pub fn mean(&self) -> &DVector<f64> {
-        &self.mean
+        &self.0.mean
     }
 
     /// The standard deviation of the noise in the output space.
     pub fn isotropic_noise(&self) -> f64 {
-        self.output_covariance.isotropic_noise
+        self.0.output_covariance.isotropic_noise
     }
 
     /// The linear transformation from hidden state space to output space.
     pub fn transform(&self) -> &DMatrix<f64> {
-        &self.output_covariance.transform
+        &self.0.output_covariance.transform
     }
 
     /// The number of features for this model.
     pub fn output_size(&self) -> usize {
-        self.output_covariance.output_size()
+        self.0.output_covariance.output_size()
     }
 
     /// The number of hidden values for this model.
     pub fn state_size(&self) -> usize {
-        self.output_covariance.state_size()
+        self.0.output_covariance.state_size()
     }
 
     /// Creates a zeroed `InferredMasked` struct that is conpatible with this model.
     fn uninferred(&self) -> InferredMasked {
         InferredMasked {
+            model: self.clone(),
             state: DVector::zeros(self.state_size()),
             covariance: DMatrix::identity(self.state_size(), self.state_size()),
         }
@@ -112,13 +117,14 @@ impl PPCAModel {
 
     /// The total number of parameters involved in training (used for information criteria).
     pub fn n_parameters(&self) -> usize {
-        1 + self.state_size() * self.output_size() + self.mean.nrows()
+        1 + self.state_size() * self.output_size() + self.0.mean.nrows()
     }
 
     /// The relative strength of each hidden variable on the output. This is equivalent to the
     /// eigenvalues in the standard PCA.
     pub fn singular_values(&self) -> DVector<f64> {
-        self.output_covariance
+        self.0
+            .output_covariance
             .transform
             .column_iter()
             .map(|column| column.norm().sqrt())
@@ -134,8 +140,8 @@ impl PPCAModel {
             return 0.0;
         };
 
-        let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
-        let sub_covariance = self.output_covariance.masked(&sample.mask);
+        let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.0.mean));
+        let sub_covariance = self.0.output_covariance.masked(&sample.mask);
 
         let llk = -sub_covariance.quadratic_form(&sub_sample) / 2.0
             - sub_covariance.covariance_log_det() / 2.0
@@ -169,9 +175,9 @@ impl PPCAModel {
     /// generated value.
     pub fn sample_one(&self, mask_prob: f64) -> MaskedSample {
         let sampled_state: DVector<f64> =
-            &*self.output_covariance.transform * standard_noise(self.state_size()) + &self.mean;
+            &*self.0.output_covariance.transform * standard_noise(self.state_size()) + &self.0.mean;
         let noise: DVector<f64> =
-            self.output_covariance.isotropic_noise * standard_noise(self.output_size());
+            self.0.output_covariance.isotropic_noise * standard_noise(self.output_size());
         let mask = Mask(
             Bernoulli::new(1.0 - mask_prob as f64)
                 .expect("invalid mask probability")
@@ -203,10 +209,11 @@ impl PPCAModel {
             return self.uninferred();
         }
 
-        let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.mean));
-        let sub_covariance = self.output_covariance.masked(&sample.mask);
+        let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.0.mean));
+        let sub_covariance = self.0.output_covariance.masked(&sample.mask);
 
         InferredMasked {
+            model: self.clone(),
             state: sub_covariance.estimator_transform() * sub_sample,
             covariance: sub_covariance.estimator_covariance(),
         }
@@ -270,7 +277,7 @@ impl PPCAModel {
             .zip(&dataset.weights)
             .zip(&inferred)
             .map(|((sample, &weight), inferred)| {
-                let centered_filled = sample.mask.fillna(&(sample.data_vector() - &self.mean));
+                let centered_filled = sample.mask.fillna(&(sample.data_vector() - &self.0.mean));
                 weight * centered_filled * inferred.state.transpose()
             })
             .reduce(
@@ -290,7 +297,7 @@ impl PPCAModel {
                     // In case we get an empty dimension...
                     .chain([DMatrix::zeros(self.state_size(), self.state_size())])
                     .sum::<DMatrix<f64>>()
-                    + self.smoothing_factor
+                    + self.0.smoothing_factor
                         * DMatrix::<f64>::identity(self.state_size(), self.state_size());
                 let cross_moment_row = total_cross_moment.row(idx).transpose();
                 total_second_moment
@@ -298,7 +305,8 @@ impl PPCAModel {
                     .solve(&cross_moment_row)
                     .unwrap_or_else(|| {
                         // Keep old row if you can't solve the linear system.
-                        self.output_covariance
+                        self.0
+                            .output_covariance
                             .transform
                             .row(idx)
                             .transpose()
@@ -314,12 +322,12 @@ impl PPCAModel {
         .filter(|((sample, _), _)| !sample.is_empty())
         .map(
             |((sample, &weight), inferred)| {
-            let sub_covariance = self.output_covariance.masked(&sample.mask);
+            let sub_covariance = self.0.output_covariance.masked(&sample.mask);
             let sub_transform = &*sub_covariance.transform;
             let deviation = sample.mask.fillna(
                 &(sample.data_vector()
-                    - &*self.output_covariance.transform * &inferred.state
-                    - &self.mean),
+                    - &*self.0.output_covariance.transform * &inferred.state
+                    - &self.0.mean),
             );
 
             (
@@ -343,16 +351,16 @@ impl PPCAModel {
             total_deviation.zip_map(
                 &totals,
                 |sum, count| if count > 0.0 { sum / count } else { 0.0 },
-            ) + &self.mean;
+            ) + &self.0.mean;
 
-        PPCAModel {
+        PPCAModel(Arc::new(PPCAModelInner {
             output_covariance: OutputCovariance {
                 transform: Cow::Owned(new_transform),
                 isotropic_noise: average_square_error.sqrt(),
             },
-            smoothing_factor: self.smoothing_factor,
+            smoothing_factor: self.0.smoothing_factor,
             mean: new_mean,
-        }
+        }))
     }
 
     /// Returns a canonical version of this model. This does not alter the log-probablility
@@ -360,6 +368,7 @@ impl PPCAModel {
     /// variables.
     pub fn to_canonical(&self) -> PPCAModel {
         let mut svd = self
+            .0
             .output_covariance
             .transform
             .clone_owned()
@@ -372,20 +381,21 @@ impl PPCAModel {
             column *= column.sum().signum();
         }
 
-        PPCAModel {
+        PPCAModel(Arc::new(PPCAModelInner {
             output_covariance: OutputCovariance::new_owned(
-                self.output_covariance.isotropic_noise,
+                self.0.output_covariance.isotropic_noise,
                 new_transform,
             ),
-            smoothing_factor: self.smoothing_factor,
-            mean: self.mean.clone(),
-        }
+            smoothing_factor: self.0.smoothing_factor,
+            mean: self.0.mean.clone(),
+        }))
     }
 }
 
 /// The inferred probability distribution in the state space of a given sample.
 #[derive(Debug)]
 pub struct InferredMasked {
+    model: PPCAModel,
     state: DVector<f64>,
     covariance: DMatrix<f64>,
 }
@@ -409,7 +419,7 @@ impl InferredMasked {
 
     /// The smoothed output values for a given output model.
     pub fn smoothed(&self, ppca: &PPCAModel) -> DVector<f64> {
-        &*ppca.output_covariance.transform * self.state() + &ppca.mean
+        &*ppca.0.output_covariance.transform * self.state() + &ppca.0.mean
     }
 
     /// The extrapolated output values for a given output model and extant values in a given
@@ -426,7 +436,7 @@ impl InferredMasked {
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn smoothed_covariance(&self, ppca: &PPCAModel) -> DMatrix<f64> {
-        let covariance = &ppca.output_covariance;
+        let covariance = &ppca.0.output_covariance;
 
         DMatrix::identity(covariance.output_size(), covariance.output_size())
             * covariance.isotropic_noise.powi(2)
@@ -443,7 +453,7 @@ impl InferredMasked {
         // Here, we will calculate `I sigma^2 + C Sxx C^T` for the unobserved samples in a
         // clever way...
 
-        let covariance = &ppca.output_covariance;
+        let covariance = &ppca.0.output_covariance;
 
         // The `inner_inverse` part.
         let transformed_state_covariance = &*covariance.transform * &self.covariance;
@@ -478,7 +488,7 @@ impl InferredMasked {
             return DMatrix::zeros(ppca.output_size(), ppca.output_size());
         }
 
-        let sub_covariance = ppca.output_covariance.masked(&negative);
+        let sub_covariance = ppca.0.output_covariance.masked(&negative);
 
         let output_covariance =
             DMatrix::identity(sub_covariance.output_size(), sub_covariance.output_size())
@@ -510,7 +520,7 @@ impl InferredMasked {
             return DVector::zeros(ppca.output_size());
         }
 
-        let sub_covariance = ppca.output_covariance.masked(&negative);
+        let sub_covariance = ppca.0.output_covariance.masked(&negative);
 
         // The `inner_inverse` part.
         let transformed_state_covariance = &*sub_covariance.transform * &self.covariance;
@@ -542,6 +552,7 @@ impl InferredMasked {
             .cholesky()
             .expect("Cholesky decomposition failed");
         PosteriorSampler {
+            model: self.model.clone(),
             state: self.state.clone(),
             cholesky_l: cholesky.l(),
         }
@@ -551,6 +562,7 @@ impl InferredMasked {
 /// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
 /// is, it does not include the model isotropic noise.
 pub struct PosteriorSampler {
+    model: PPCAModel,
     state: DVector<f64>,
     cholesky_l: DMatrix<f64>,
 }
@@ -564,7 +576,7 @@ impl Distribution<DVector<f64>> for PosteriorSampler {
             .map(|_| rand_distr::StandardNormal.sample(rng))
             .collect::<Vec<_>>()
             .into();
-        &self.state + &self.cholesky_l * standard
+        self.model.transform() * (&self.state + &self.cholesky_l * standard)
     }
 }
 
