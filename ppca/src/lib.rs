@@ -19,8 +19,8 @@ mod ppca_model;
 mod utils;
 
 pub use dataset::{Dataset, MaskedSample};
-pub use mix::{InferredMaskedMix, PPCAMix, SamplePosteriorMix};
-pub use ppca_model::{InferredMasked, PPCAModel, SamplePosterior};
+pub use mix::{InferredMaskedMix, PPCAMix, PosteriorSamplerMix};
+pub use ppca_model::{InferredMasked, PPCAModel, PosteriorSampler};
 
 #[cfg(test)]
 mod test {
