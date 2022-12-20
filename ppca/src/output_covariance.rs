@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use crate::utils::Mask;
 
 /// An utilities class with optmized functions to work on the _output covariance_ matrix.
-/// 
+///
 /// The main motivation for this class is that the output covariance matrix has a too
 /// high dimensionality for we to be able to work with it directly. On the other hand, it
 /// has a simplified form:
@@ -71,9 +71,9 @@ impl<'a> OutputCovariance<'a> {
 
     /// Calculates the linear transformation that estimates the hidden state from the
     /// observation.
-    /// 
+    ///
     /// # Warning: linear algebra shenanigans afoot!!
-    /// 
+    ///
     /// Being the output covariance `sigma^2*I + C*C^T` and the estimator transform
     /// `C^T * (sigma^2*I + C*C^T)^-1`, we have a pesky inverse to calculate! Thankfully,
     /// we can use the Woodbury identity to the rescue!

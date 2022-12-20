@@ -3,8 +3,8 @@ use rand_distr::{Distribution, WeightedIndex};
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::ppca_model::{InferredMasked, PPCAModel};
 use crate::dataset::{Dataset, MaskedSample};
+use crate::ppca_model::{InferredMasked, PPCAModel};
 
 /// Performs Bayesian inference in the log domain.
 fn robust_log_softmax(data: DVector<f64>) -> DVector<f64> {
@@ -24,9 +24,9 @@ fn robust_log_softnorm(data: DVector<f64>) -> f64 {
 /// expressed in log-scale. This models allows for modelling of data clustering and
 /// non-linear learning of data. However, it will use significantly more memory and is
 /// not guaranteed to converge to a global maximum.
-/// 
+///
 /// # Notes
-/// 
+///
 /// * The list of log-weights does not need to be normalized. Normalization is carried out
 /// internally.
 /// * Each PPCA model in the mixture might have its own state size. However, all PPCA
@@ -66,7 +66,12 @@ impl PPCAMix {
     /// Creates a new random __untrained__ model from a given number of PPCA modes, a latent state
     /// size, a dataset and a smoothing factor. The smoothing factor helps with overfit of rarely
     /// occuring dimensions. If you don't care about that, set it to `0.0`.
-    pub fn init(n_models: usize, state_size: usize, dataset: &Dataset, smoothing_factor: f64) -> PPCAMix {
+    pub fn init(
+        n_models: usize,
+        state_size: usize,
+        dataset: &Dataset,
+        smoothing_factor: f64,
+    ) -> PPCAMix {
         PPCAMix::new(
             (0..n_models)
                 .map(|_| PPCAModel::init(state_size, dataset, smoothing_factor))
@@ -100,9 +105,14 @@ impl PPCAMix {
         &self.models
     }
 
-    /// The strength (or _a priori_ probablilty) for each PPCA model.
+    /// The log-strength (or log-_a priori_ probablilty) for each PPCA model.
     pub fn log_weights(&self) -> &DVector<f64> {
         &self.log_weights
+    }
+
+    /// The strength (or _a priori_ probablilty) for each PPCA model.
+    pub fn weights(&self) -> DVector<f64> {
+        self.log_weights.map(f64::exp)
     }
 
     /// Sample a full dataset from the PPCA model and masks each entry according to a
@@ -155,9 +165,7 @@ impl PPCAMix {
             .data
             .par_iter()
             .zip(&dataset.weights)
-            .map(|(sample, &weight)| {
-                weight * self.llk_one(sample)
-            })
+            .map(|(sample, &weight)| weight * self.llk_one(sample))
             .sum::<f64>()
     }
 
@@ -175,7 +183,7 @@ impl PPCAMix {
     }
 
     /// Infers the probability distribution of a single sample.
-    pub(crate) fn infer_one(&self, sample: &MaskedSample) -> InferredMaskedMix {
+    pub fn infer_one(&self, sample: &MaskedSample) -> InferredMaskedMix {
         InferredMaskedMix {
             log_posterior: robust_log_softmax(self.llks_one(sample) + &self.log_weights),
             inferred: self
@@ -195,50 +203,32 @@ impl PPCAMix {
             .collect()
     }
 
+    /// Filters a single samples, removing noise from it and inferring the missing dimensions.
+    pub fn smooth_one(&self, sample: &MaskedSample) -> MaskedSample {
+        MaskedSample::unmasked(self.infer_one(sample).smoothed(self))
+    }
+
     /// Filters a dataset of samples, removing noise from the extant samples and
     /// inferring the missing samples.
     pub fn smooth(&self, dataset: &Dataset) -> Dataset {
-        let smooths = self
-            .models
-            .iter()
-            .map(|model| model.smooth(dataset))
-            .collect::<Vec<_>>();
-        let clusters = self.infer_cluster(dataset);
-
-        (0..dataset.len())
-            .into_par_iter()
-            .map(|i| {
-                let posterior = clusters.row(i).map(f64::exp);
-                let smoothed = posterior
-                    .iter()
-                    .zip(&*smooths[i].data)
-                    .map(|(&pi, smooth_i)| pi * smooth_i.masked_vector())
-                    .sum();
-                MaskedSample::unmasked(smoothed)
-            })
+        dataset
+            .data
+            .par_iter()
+            .map(|sample| self.smooth_one(sample))
             .collect()
     }
 
-    /// Extrapolates the missing values with the most probable values.
-    pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
-        let exrapolated = self
-            .models
-            .iter()
-            .map(|model| model.extrapolate(dataset))
-            .collect::<Vec<_>>();
-        let clusters = self.infer_cluster(dataset);
+    /// Extrapolates the missing values from a sample with the most probable values.
+    pub fn extrapolate_one(&self, sample: &MaskedSample) -> MaskedSample {
+        MaskedSample::unmasked(self.infer_one(sample).extrapolated(self, sample))
+    }
 
-        (0..dataset.len())
-            .into_par_iter()
-            .map(|i| {
-                let posterior = clusters.row(i).map(f64::exp);
-                let smoothed = posterior
-                    .iter()
-                    .zip(&*exrapolated[i].data)
-                    .map(|(&pi, extrap_i)| pi * extrap_i.masked_vector())
-                    .sum();
-                MaskedSample::unmasked(smoothed)
-            })
+    /// Extrapolates the missing values from a dataset with the most probable values.
+    pub fn extrapolate(&self, dataset: &Dataset) -> Dataset {
+        dataset
+            .data
+            .par_iter()
+            .map(|sample| self.extrapolate_one(sample))
             .collect()
     }
 
@@ -306,7 +296,6 @@ impl PPCAMix {
     }
 }
 
-
 /// The inferred probability distribution in the state space of a given sample of a PPCA Mixture
 /// Model. This class is the analogous of [`InferredMasked`] for the [`PPCAMix`] model.
 pub struct InferredMaskedMix {
@@ -368,11 +357,10 @@ impl InferredMaskedMix {
             .sum::<DVector<f64>>()
     }
 
-    
     /// The covariance for the smoothed output values.
-    /// 
+    ///
     /// # Note:
-    /// 
+    ///
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn smoothed_covariance(&self, mix: &PPCAMix) -> DMatrix<f64> {
@@ -392,9 +380,9 @@ impl InferredMaskedMix {
 
     /// Returns an _approximation_ of the smoothed output covariance matrix, treating each masked
     /// output as an independent normal distribution.
-    /// 
+    ///
     /// # Note:
-    /// 
+    ///
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
     pub fn smoothed_covariance_diagonal(&self, mix: &PPCAMix) -> DVector<f64> {
         let mean = self.smoothed(mix);
@@ -412,9 +400,9 @@ impl InferredMaskedMix {
 
     /// The covariance for the extraplated values for a given output model and extant values in a given
     /// sample.
-    /// 
+    ///
     /// # Note:
-    /// 
+    ///
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn extrapolated_covariance(&self, mix: &PPCAMix, sample: &MaskedSample) -> DMatrix<f64> {
@@ -434,7 +422,7 @@ impl InferredMaskedMix {
 
     /// Returns an _approximation_ of the extrapolated output covariance matrix, treating each masked
     /// output as an independent normal distribution.
-    /// 
+    ///
     /// # Note
     ///
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.

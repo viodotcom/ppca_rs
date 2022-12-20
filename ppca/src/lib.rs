@@ -1,6 +1,6 @@
 //! This crate implements a _Probabilistic Principal Component Analysis_ in pure Rust, based on a
 //! legacy Python version, which was just too slow for the job (even with `numpy` "C code" to spice it up!)
-//! 
+//!
 //! If you want all the comfort that the Python ecossystem can provide, you are welcome to check out the
 //! python wrapper in [PyPI](https://pypi.org/project/ppca-rs/0.3.1/). However, if you want top performance
 //! and great debugging support, this crate is for you.
@@ -12,15 +12,15 @@
 //! * <https://www.youtube.com/watch?v=lJ0cXPoEozg>: video on YouTube explaining the topic.
 
 // mod dataframe_adapter;
+mod dataset;
 mod mix;
 mod output_covariance;
 mod ppca_model;
 mod utils;
-mod dataset;
 
 pub use dataset::{Dataset, MaskedSample};
-pub use ppca_model::{PPCAModel, InferredMasked};
-pub use mix::{PPCAMix, InferredMaskedMix};
+pub use mix::{InferredMaskedMix, PPCAMix};
+pub use ppca_model::{InferredMasked, PPCAModel};
 
 #[cfg(test)]
 mod test {

@@ -27,4 +27,8 @@ PPCAMixTrainer(sample).train(n_models=2, state_size=2, n_iters=30, smoothing_fac
 print()
 PPCAMixTrainer(sample).train(n_models=3, state_size=2, n_iters=30, smoothing_factor=1.0)
 print()
-PPCAMixTrainer(sample).train(n_models=4, state_size=2, n_iters=30, smoothing_factor=1.0)
+model = PPCAMixTrainer(sample).train(n_models=4, state_size=2, n_iters=30, smoothing_factor=1.0)
+
+model.smooth(sample)
+model.extrapolate(sample)
+model.infer(sample)

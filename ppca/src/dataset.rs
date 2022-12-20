@@ -1,5 +1,5 @@
 use bit_vec::BitVec;
-use nalgebra::{DVector};
+use nalgebra::DVector;
 use rayon::prelude::*;
 use std::sync::Arc;
 
@@ -16,14 +16,12 @@ impl MaskedSample {
     /// Creates a masked sample from a vector, masking all elements which are not finite (e.g.,
     /// `NaN` and `inf`).
     pub fn mask_non_finite(data: DVector<f64>) -> MaskedSample {
-        let mask = data.iter().copied()
-            .map(f64::is_finite)
-            .collect::<BitVec>();
+        let mask = data.iter().copied().map(f64::is_finite).collect::<BitVec>();
         MaskedSample::new(data, Mask(mask))
     }
 
     /// Creates a masked sample from data and a mask. The value is considered missing if its index
-    /// in the masked is set to `false`. 
+    /// in the masked is set to `false`.
     pub fn new(data: DVector<f64>, mask: Mask) -> MaskedSample {
         MaskedSample { data, mask }
     }
@@ -36,7 +34,7 @@ impl MaskedSample {
         }
     }
 
-    /// Returns the data vector associated with this sample. 
+    /// Returns the data vector associated with this sample.
     pub fn data_vector(&self) -> DVector<f64> {
         DVector::from(self.data.clone())
     }
@@ -47,7 +45,7 @@ impl MaskedSample {
     }
 
     /// Returns the mask of this sample. The value is considered missing if its index
-    /// in the masked is set to `false`. 
+    /// in the masked is set to `false`.
     pub fn mask(&self) -> &Mask {
         &self.mask
     }
@@ -66,9 +64,9 @@ impl MaskedSample {
 
 /// Represents a dataset. This is a wrapper over a 2D array of dimensions
 /// `(n_samples, n_features)`.
-/// 
+///
 /// ## Note
-/// 
+///
 /// All arrays involved have to be of data type `float64`.
 #[derive(Debug, Clone)]
 pub struct Dataset {

@@ -13,7 +13,7 @@ use crate::utils::{standard_noise, standard_noise_matrix, Mask};
 const LN_2PI: f64 = 1.8378770664093453;
 
 /// A PPCA model which can infer missing values.
-/// 
+///
 /// Eeach sample for this model behaves according to the following
 /// statistical latent variable model.
 /// ```
@@ -38,7 +38,12 @@ pub struct PPCAModel {
 }
 
 impl PPCAModel {
-    pub fn new(isotropic_noise: f64, transform: DMatrix<f64>, mean: DVector<f64>, smoothing_factor: f64) -> PPCAModel {
+    pub fn new(
+        isotropic_noise: f64,
+        transform: DMatrix<f64>,
+        mean: DVector<f64>,
+        smoothing_factor: f64,
+    ) -> PPCAModel {
         PPCAModel {
             output_covariance: OutputCovariance::new_owned(isotropic_noise, transform),
             mean,
@@ -284,7 +289,8 @@ impl PPCAModel {
                     // In case we get an empty dimension...
                     .chain([DMatrix::zeros(self.state_size(), self.state_size())])
                     .sum::<DMatrix<f64>>()
-                    + self.smoothing_factor * DMatrix::<f64>::identity(self.state_size(), self.state_size());
+                    + self.smoothing_factor
+                        * DMatrix::<f64>::identity(self.state_size(), self.state_size());
                 let cross_moment_row = total_cross_moment.row(idx).transpose();
                 total_second_moment
                     .qr()
@@ -413,9 +419,9 @@ impl InferredMasked {
     }
 
     /// The covariance for the smoothed output values.
-    /// 
+    ///
     /// # Note:
-    /// 
+    ///
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn smoothed_covariance(&self, ppca: &PPCAModel) -> DMatrix<f64> {
@@ -428,9 +434,9 @@ impl InferredMasked {
 
     /// Returns an _approximation_ of the smoothed output covariance matrix, treating each masked
     /// output as an independent normal distribution.
-    /// 
+    ///
     /// # Note:
-    /// 
+    ///
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.
     pub fn smoothed_covariance_diagonal(&self, ppca: &PPCAModel) -> DVector<f64> {
         // Here, we will calculate `I sigma^2 + C Sxx C^T` for the unobserved samples in a
@@ -459,9 +465,9 @@ impl InferredMasked {
 
     /// The covariance for the extraplated values for a given output model and extant values in a given
     /// sample.
-    /// 
+    ///
     /// # Note:
-    /// 
+    ///
     /// Afraid of the big, fat matrix? The method `output_covariance_diagonal` might just
     /// save your life.
     pub fn extrapolated_covariance(&self, ppca: &PPCAModel, sample: &MaskedSample) -> DMatrix<f64> {
@@ -485,7 +491,7 @@ impl InferredMasked {
 
     /// Returns an _approximation_ of the extrapolated output covariance matrix, treating each masked
     /// output as an independent normal distribution.
-    /// 
+    ///
     /// # Note
     ///
     /// Use this not to get lost with big matrices in the output, losing CPU, memory and hair.

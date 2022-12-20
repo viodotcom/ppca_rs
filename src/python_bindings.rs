@@ -539,6 +539,17 @@ impl PPCAMixWrapper {
             .to_owned()
     }
 
+    #[getter]
+    fn weights(&self, py: Python) -> Py<PyArray1<f64>> {
+        self.0
+            .weights()
+            .clone()
+            .to_pyarray(py)
+            .reshape(self.0.log_weights().len())
+            .expect("can reshape")
+            .to_owned()
+    }
+
     pub fn llks(&self, py: Python, dataset: &DatasetWrapper) -> Py<PyArray1<f64>> {
         let llks = py.allow_threads(|| self.0.llks(&dataset.0));
         llks.to_pyarray(py)
@@ -566,7 +577,7 @@ impl PPCAMixWrapper {
             .to_owned()
     }
 
-    fn infer(&self, py: Python<'_>, dataset: &DatasetWrapper) -> InferredMaskedMixBatch {
+    pub fn infer(&self, py: Python<'_>, dataset: &DatasetWrapper) -> InferredMaskedMixBatch {
         InferredMaskedMixBatch {
             data: py.allow_threads(|| self.0.infer(&dataset.0)),
         }

@@ -286,6 +286,12 @@ class PPCAMix:
     """The number of hidden values for each PPCA model in the mixture."""
     n_parameters: int
     """The total number of parameters involved in training (used for information criteria)."""
+    models: List[PPCAModel]
+    """The constituent PPCA models of this PPPCA mixture."""
+    log_weights: np.ndarray
+    """The log-probabilities of each constituent PPCA models for this PPCA mixture."""
+    weights: np.ndarray
+    """The probabilities of each constituent PPCA models for this PPCA mixture."""
 
     @staticmethod
     def load(b: bytes) -> PPCAModel:
