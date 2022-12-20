@@ -576,7 +576,7 @@ impl Distribution<DVector<f64>> for PosteriorSampler {
             .map(|_| rand_distr::StandardNormal.sample(rng))
             .collect::<Vec<_>>()
             .into();
-        self.model.transform() * (&self.state + &self.cholesky_l * standard)
+        self.model.mean() + self.model.transform() * (&self.state + &self.cholesky_l * standard)
     }
 }
 
