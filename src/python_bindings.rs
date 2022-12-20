@@ -857,7 +857,7 @@ struct PosteriorSamplerMixBatch {
 
 #[pymethods]
 impl PosteriorSamplerMixBatch {
-    fn posterior_sampler(&self, py: Python) -> DatasetWrapper {
+    fn sample(&self, py: Python) -> DatasetWrapper {
         let samples = py.allow_threads(|| {
             self.posteriors
                 .par_iter()
