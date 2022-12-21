@@ -15,6 +15,15 @@ class Dataset:
     def __init__(self, ndarray: np.ndarray) -> None: ...
     def numpy(self) -> np.ndarray:
         """Returns the underlying dataset as a 2D numpy array."""
+    @staticmethod
+    def load(b: bytes) -> Dataset:
+        """
+        Loads a Dataset from binary data. Picking of Datasets is not supported.
+        """
+    def dump(self) -> bytes:
+        """
+        Encodes the Dataset as binary data. Picking of Datasets is not supported.
+        """
     def __len__(self) -> int: ...
     def is_empty(self) -> bool: ...
     def empty_dimensions(self) -> List[int]:
