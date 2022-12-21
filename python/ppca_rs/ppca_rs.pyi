@@ -93,6 +93,25 @@ class InferredMasked:
         hair.
         """
 
+class Prior:
+    """
+    A prior for the PPCA model. Use this class to mitigate overfit on training (especially on
+    frequently masked dimensions) and to input _a priori_ knowledge on what the PPCA should look
+    like.
+    """
+
+    def __init__(self) -> None:
+        """Creates an uninformed prior."""
+    def with_mean_prior(self, mean: np.ndarray, mean_covariance: np.ndarray) -> Prior:
+        """
+        Add a prior to the mean of the PPCA. The prior is a normal multivariate distribution.
+        """
+    def with_isotropic_noise_prior(self, alpha: float, beta: float) -> Prior:
+        """
+        Add an isotropic noise prior. The prior is an Inverse Gamma distribution with shape `alpha`
+        and rate `beta`.
+        """
+
 class PPCAModel:
     """
     A PPCA model: each sample for this model behaves according to the following
@@ -183,6 +202,14 @@ class PPCAModel:
         """
     def extrapolate(self, dataset: Dataset) -> Dataset:
         """Extrapolates the missing values with the most probable values."""
+    def iterate_with_prior(self, dataset: Dataset, prior: Prior) -> PPCAModel:
+        """
+        Makes one iteration of the EM algorithm for the PPCA over an observed dataset,
+        using a supplied PPCA prior and returning the improved model. This method will
+        not necessarily increase the log-likelihood of the returned model, but it will
+        return an improved _maximum a posteriori_ (MAP) estimate of the PPCA model
+        according to the supplied prior.
+        """
     def iterate(self, dataset: Dataset) -> PPCAModel:
         """
         Makes one iteration of the EM algorithm for the PPCA over an observed dataset,
@@ -342,12 +369,20 @@ class PPCAMix:
         """
     def extrapolate(self, dataset: Dataset) -> Dataset:
         """Extrapolates the missing values with the most probable values."""
-    def iterate(self, dataset: Dataset) -> PPCAModel:
+    def iterate_with_prior(self, dataset: Dataset, prior: Prior) -> PPCAMix:
+        """
+        Makes one iteration of the EM algorithm for the PPCA mixture over an observe
+        dataset, using a supplied PPCA prior (same for all constituent PPCA models) and
+        returning the improved model. This method will not necessarily increase the
+        log-likelihood of the returned model, but it will return an improved _maximum a
+        posteriori_ (MAP) estimate of the PPCA model according to the supplied prior.
+        """
+    def iterate(self, dataset: Dataset) -> PPCAMix:
         """
         Makes one iteration of the EM algorithm for the PPCA mixture model over an
         observed dataset, returning a improved model.
         """
-    def to_canonical(self) -> PPCAModel:
+    def to_canonical(self) -> PPCAMix:
         """
         Returns a canonical version of this model. This does not alter the log-probablility
         function nor the quality of the training. All it does is to transform the hidden

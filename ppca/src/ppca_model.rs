@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use crate::dataset::{Dataset, MaskedSample};
 use crate::output_covariance::OutputCovariance;
+use crate::prior::Prior;
 use crate::utils::{standard_noise, standard_noise_matrix, Mask};
 
 const LN_2PI: f64 = 1.8378770664093453;
@@ -18,10 +19,6 @@ const LN_2PI: f64 = 1.8378770664093453;
 pub struct PPCAModelInner {
     output_covariance: OutputCovariance<'static>,
     mean: DVector<f64>,
-    /// A factor to smooth out the `transform` matrix when there is little data for a
-    /// given dimension.
-    #[serde(default)]
-    smoothing_factor: f64,
 }
 
 /// A PPCA model which can infer missing values.
@@ -43,23 +40,15 @@ pub struct PPCAModelInner {
 pub struct PPCAModel(Arc<PPCAModelInner>);
 
 impl PPCAModel {
-    pub fn new(
-        isotropic_noise: f64,
-        transform: DMatrix<f64>,
-        mean: DVector<f64>,
-        smoothing_factor: f64,
-    ) -> PPCAModel {
+    pub fn new(isotropic_noise: f64, transform: DMatrix<f64>, mean: DVector<f64>) -> PPCAModel {
         PPCAModel(Arc::new(PPCAModelInner {
             output_covariance: OutputCovariance::new_owned(isotropic_noise, transform),
             mean,
-            smoothing_factor,
         }))
     }
 
-    /// Creates a new random __untrained__ model from a given latent state size, a dataset and a
-    /// smoothing factor. The smoothing factor helps with overfit of rarely occuring dimensions. If
-    /// you don't care about that, set it to `0.0`.
-    pub fn init(state_size: usize, dataset: &Dataset, smoothing_factor: f64) -> PPCAModel {
+    /// Creates a new random __untrained__ model from a given latent state size and a dataset.
+    pub fn init(state_size: usize, dataset: &Dataset) -> PPCAModel {
         assert!(!dataset.is_empty());
         let output_size = dataset.output_size().expect("dataset is not empty");
         let empty_dimensions = dataset.empty_dimensions();
@@ -77,7 +66,6 @@ impl PPCAModel {
                 transform: Cow::Owned(rand_transform),
             },
             mean: DVector::zeros(output_size),
-            smoothing_factor,
         }))
     }
 
@@ -264,10 +252,20 @@ impl PPCAModel {
     }
 
     /// Makes one iteration of the EM algorithm for the PPCA over an observed dataset,
-    /// returning the improved model. The log-likelihood will **always increase** for the returned
-    /// model.
+    /// returning the improved model. The log-likelihood will **always increase** for the
+    /// returned model.
     #[must_use]
     pub fn iterate(&self, dataset: &Dataset) -> PPCAModel {
+        self.iterate_with_prior(dataset, &Prior::default())
+    }
+
+    /// Makes one iteration of the EM algorithm for the PPCA over an observed dataset,
+    /// using a supplied PPCA prior and returning the improved model. This method will
+    /// not necessarily increase the log-likelihood of the returned model, but it will
+    /// return an improved _maximum a posteriori_ (MAP) estimate of the PPCA model
+    ///  according to the supplied prior.
+    #[must_use]
+    pub fn iterate_with_prior(&self, dataset: &Dataset, prior: &Prior) -> PPCAModel {
         let inferred = self.infer(dataset);
 
         // Updated transform:
@@ -297,7 +295,7 @@ impl PPCAModel {
                     // In case we get an empty dimension...
                     .chain([DMatrix::zeros(self.state_size(), self.state_size())])
                     .sum::<DMatrix<f64>>()
-                    + self.0.smoothing_factor
+                    + prior.transformation_precision()
                         * DMatrix::<f64>::identity(self.state_size(), self.state_size());
                 let cross_moment_row = total_cross_moment.row(idx).transpose();
                 total_second_moment
@@ -318,47 +316,69 @@ impl PPCAModel {
         let new_transform = DMatrix::from_rows(&new_transform_rows);
 
         // Updated isotropic noise:
-        let (square_error, deviations_square_sum, total_deviation, totals) = dataset.data.par_iter().zip(&dataset.weights).zip(&inferred)
-        .filter(|((sample, _), _)| !sample.is_empty())
-        .map(
-            |((sample, &weight), inferred)| {
-            let sub_covariance = self.0.output_covariance.masked(&sample.mask);
-            let sub_transform = &*sub_covariance.transform;
-            let deviation = sample.mask.fillna(
-                &(sample.data_vector()
-                    - &*self.0.output_covariance.transform * &inferred.state
-                    - &self.0.mean),
-            );
+        let (square_error, deviations_square_sum, total_deviation, totals) = dataset
+            .data
+            .par_iter()
+            .zip(&dataset.weights)
+            .zip(&inferred)
+            .filter(|((sample, _), _)| !sample.is_empty())
+            .map(
+                |((sample, &weight), inferred)| {
+                let sub_covariance = self.0.output_covariance.masked(&sample.mask);
+                let sub_transform = &*sub_covariance.transform;
+                let deviation = sample.mask.fillna(
+                    &(sample.data_vector()
+                        - &*self.0.output_covariance.transform * &inferred.state
+                        - &self.0.mean),
+                );
 
-            (
-                weight * (sub_transform * &inferred.covariance).dot(&sub_transform),
-                weight * deviation.norm_squared(),
-                weight * deviation,
-                weight * sample.mask.as_vector(),
-            )
-        }).reduce_with(|
-            (square_error, deviation_square_sum, total_deviation, totals),
-            (square_error_, deviation_square_sum_, total_deviation_, totals_)| (
-                square_error + square_error_,
-                deviation_square_sum + deviation_square_sum_,
-                total_deviation + total_deviation_,
-                totals + totals_
-            )
-        ).expect("nonempty dataset");
+                (
+                    weight * (sub_transform * &inferred.covariance).dot(&sub_transform),
+                    weight * deviation.norm_squared(),
+                    weight * deviation,
+                    weight * sample.mask.as_vector(),
+                )
+            }).reduce_with(|
+                (square_error, deviation_square_sum, total_deviation, totals),
+                (square_error_, deviation_square_sum_, total_deviation_, totals_)| (
+                    square_error + square_error_,
+                    deviation_square_sum + deviation_square_sum_,
+                    total_deviation + total_deviation_,
+                    totals + totals_
+                )
+            ).expect("non-empty dataset");
 
-        let average_square_error = (square_error + deviations_square_sum) / totals.sum();
-        let new_mean =
+        let isotropic_noise_sq = if prior.has_isotropic_noise_prior() {
+            // Note: Inverse gamma inference here...
+            // Recall _mode_ for inverse gamma: 
+            //     beta_post / (alpha_post + 1)
+            // And... 
+            //     beta_post = [sum of all squarey stuff] / 2.0 + beta_prior
+            //     alpha_post = [number of samples] / 2.0 + alpha_prior 
+            ((square_error + deviations_square_sum) / 2.0 + prior.isotropic_noise_beta())
+                / (totals.sum() / 2.0 + prior.isotropic_noise_alpha() + 1.0)
+        } else {
+            (square_error + deviations_square_sum) / totals.sum()
+        };
+
+        let mut new_mean =
             total_deviation.zip_map(
                 &totals,
                 |sum, count| if count > 0.0 { sum / count } else { 0.0 },
             ) + &self.0.mean;
 
+        if prior.has_mean_prior() {
+            new_mean = prior.smooth_mean(
+                new_mean,
+                DMatrix::from_diagonal(&totals) / isotropic_noise_sq,
+            );
+        }
+
         PPCAModel(Arc::new(PPCAModelInner {
             output_covariance: OutputCovariance {
                 transform: Cow::Owned(new_transform),
-                isotropic_noise: average_square_error.sqrt(),
+                isotropic_noise: isotropic_noise_sq.sqrt(),
             },
-            smoothing_factor: self.0.smoothing_factor,
             mean: new_mean,
         }))
     }
@@ -386,7 +406,6 @@ impl PPCAModel {
                 self.0.output_covariance.isotropic_noise,
                 new_transform,
             ),
-            smoothing_factor: self.0.smoothing_factor,
             mean: self.0.mean.clone(),
         }))
     }

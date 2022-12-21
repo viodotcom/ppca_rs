@@ -5,8 +5,8 @@ use rand_distr::Distribution;
 use rayon::prelude::*;
 
 use ppca::{
-    Dataset, InferredMasked, InferredMaskedMix, MaskedSample, PPCAMix, PPCAModel,
-    PosteriorSamplerMix, PosteriorSampler,
+    Dataset, InferredMasked, InferredMaskedMix, MaskedSample, PPCAMix, PPCAModel, PosteriorSampler,
+    PosteriorSamplerMix, Prior,
 };
 
 /// This module is implemented in Rust.
@@ -47,7 +47,6 @@ impl DatasetWrapper {
 
         Ok(DatasetWrapper(Dataset::new(data)))
     }
-
 
     #[staticmethod]
     fn load(bytes: &PyBytes) -> PyResult<DatasetWrapper> {
@@ -144,6 +143,59 @@ impl DatasetChunks {
         } else {
             None
         }
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "Prior", module = "ppca_rs")]
+struct PriorWrapper(Prior);
+
+#[pymethods]
+impl PriorWrapper {
+    #[new]
+    pub fn new() -> PriorWrapper {
+        PriorWrapper(Prior::default())
+    }
+
+    pub fn with_mean_prior(
+        &self,
+        py: Python,
+        mean: Py<PyArray2<f64>>,
+        mean_covariance: Py<PyArray2<f64>>,
+    ) -> PyResult<Self> {
+        let new = self.0.clone().with_mean_prior(
+            (mean
+                .as_ref(py)
+                .try_readonly()?
+                .try_as_matrix()
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyException::new_err(
+                        "could not convert transformation ndarray to matrix",
+                    )
+                })? as DVectorSlice<f64>)
+                .into_owned(),
+            (mean_covariance
+                .as_ref(py)
+                .try_readonly()?
+                .try_as_matrix()
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyException::new_err(
+                        "could not convert transformation ndarray to matrix",
+                    )
+                })? as DMatrixSlice<f64>)
+                .into_owned(),
+        );
+        Ok(PriorWrapper(new))
+    }
+
+    pub fn with_isotropic_noise_prior(&self, alpha: f64, beta: f64) -> Self {
+        let new = self.0.clone().with_isotropic_noise_prior(alpha, beta);
+        PriorWrapper(new)
+    }
+
+    pub fn with_transformation_precision(&self, precision: f64) -> Self {
+        let new = self.0.clone().with_transformation_precision(precision);
+        PriorWrapper(new)
     }
 }
 
@@ -311,7 +363,6 @@ impl PosteriorSamplerBatch {
     }
 }
 
-
 #[pyclass]
 #[pyo3(name = "PPCAModel", module = "ppca_rs")]
 #[derive(Debug, Clone)]
@@ -320,13 +371,11 @@ struct PPCAModelWrapper(PPCAModel);
 #[pymethods]
 impl PPCAModelWrapper {
     #[new]
-    #[args(smoothing_factor = "0f64")]
     fn new(
         py: Python<'_>,
         isotropic_noise: f64,
         transform: Py<PyArray2<f64>>,
         mean: Py<PyArray2<f64>>,
-        smoothing_factor: f64,
     ) -> PyResult<PPCAModelWrapper> {
         Ok(PPCAModelWrapper(PPCAModel::new(
             isotropic_noise,
@@ -350,7 +399,6 @@ impl PPCAModelWrapper {
                     )
                 })? as DVectorSlice<f64>)
                 .into_owned(),
-            smoothing_factor,
         )))
     }
 
@@ -416,13 +464,8 @@ impl PPCAModelWrapper {
     }
 
     #[staticmethod]
-    #[args(smoothing_factor = "0f64")]
-    fn init(
-        state_size: usize,
-        dataset: &DatasetWrapper,
-        smoothing_factor: f64,
-    ) -> PPCAModelWrapper {
-        PPCAModelWrapper(PPCAModel::init(state_size, &dataset.0, smoothing_factor))
+    fn init(state_size: usize, dataset: &DatasetWrapper) -> PPCAModelWrapper {
+        PPCAModelWrapper(PPCAModel::init(state_size, &dataset.0))
     }
 
     fn __repr__(&self, py: Python<'_>) -> String {
@@ -465,6 +508,15 @@ impl PPCAModelWrapper {
 
     fn extrapolate(&self, py: Python<'_>, dataset: &DatasetWrapper) -> DatasetWrapper {
         py.allow_threads(|| DatasetWrapper(self.0.extrapolate(&dataset.0)))
+    }
+
+    fn iterate_with_prior(
+        &self,
+        py: Python<'_>,
+        dataset: &DatasetWrapper,
+        prior: &PriorWrapper,
+    ) -> PPCAModelWrapper {
+        py.allow_threads(|| PPCAModelWrapper(self.0.iterate_with_prior(&dataset.0, &prior.0)))
     }
 
     fn iterate(&self, py: Python<'_>, dataset: &DatasetWrapper) -> PPCAModelWrapper {
@@ -524,22 +576,13 @@ impl PPCAMixWrapper {
     }
 
     #[staticmethod]
-    #[args(smoothing_factor = "0f64")]
     fn init(
         py: Python,
         n_models: usize,
         state_size: usize,
         dataset: &DatasetWrapper,
-        smoothing_factor: f64,
     ) -> PPCAMixWrapper {
-        py.allow_threads(|| {
-            PPCAMixWrapper(PPCAMix::init(
-                n_models,
-                state_size,
-                &dataset.0,
-                smoothing_factor,
-            ))
-        })
+        py.allow_threads(|| PPCAMixWrapper(PPCAMix::init(n_models, state_size, &dataset.0)))
     }
 
     #[staticmethod]
@@ -643,6 +686,15 @@ impl PPCAMixWrapper {
 
     pub fn extrapolate(&self, py: Python, dataset: &DatasetWrapper) -> DatasetWrapper {
         DatasetWrapper(py.allow_threads(|| self.0.extrapolate(&dataset.0)))
+    }
+
+    fn iterate_with_prior(
+        &self,
+        py: Python<'_>,
+        dataset: &DatasetWrapper,
+        prior: &PriorWrapper,
+    ) -> PPCAMixWrapper {
+        py.allow_threads(|| PPCAMixWrapper(self.0.iterate_with_prior(&dataset.0, &prior.0)))
     }
 
     pub fn iterate(&self, py: Python, dataset: &DatasetWrapper) -> PPCAMixWrapper {

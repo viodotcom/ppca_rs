@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ppca-rs"
-version = "0.3.2"
+version = "0.4.0"
 requires-python = ">=3.7"
 description = "Python+Rust implementation of the Probabilistic Principal Component Analysis model"
 readme = "readme.md"

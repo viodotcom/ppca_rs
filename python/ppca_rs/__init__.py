@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Literal, Optional
 import numpy as np
 
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 
 
 @dataclass(frozen=True)
@@ -25,18 +25,18 @@ class PPCATrainer:
     dataset: Dataset
     """The list of masked samples against which the PPCA will be trained."""
 
-    def __init(self, state_size: int, smoothing_factor: float) -> PPCAModel:
+    def __init(self, state_size: int) -> PPCAModel:
         """Initializes a first guess for the model."""
-        init = PPCAModel.init(state_size, self.dataset, smoothing_factor)
+        init = PPCAModel.init(state_size, self.dataset)
         return init
 
     def train(
         self,
         *,
         start: Optional[PPCAModel] = None,
+        prior: Optional[Prior] = None,
         state_size: int,
         n_iters: int = 10,
-        smoothing_factor: float = 0.0,
         metric: Literal["aic"] | Literal["bic"] | Literal["llk"] = "aic",
         quiet: bool = False,
     ) -> PPCAModel:
@@ -44,7 +44,7 @@ class PPCATrainer:
         Trains a PPCA model for a given state size for a given number of iterations. Use
         `smooth_factor` to control for overfit of dimensions with few samples.
         """
-        model = start or self.__init(state_size, smoothing_factor)
+        model = start or self.__init(state_size)
 
         for idx in range(n_iters):
             if not quiet:
@@ -58,8 +58,11 @@ class PPCATrainer:
                 print(
                     f"Masked PPCA iteration {idx + 1}: {metric}={getattr(metrics, metric)}"
                 )
-
-            model = model.iterate(self.dataset)
+            model = (
+                model.iterate_with_prior(self.dataset, prior)
+                if prior is not None
+                else model.iterate(self.dataset)
+            )
 
         return model.to_canonical()
 
@@ -71,21 +74,19 @@ class PPCAMixTrainer:
     dataset: Dataset
     """The list of masked samples against which the PPCA mixture model will be trained."""
 
-    def __init(
-        self, n_models: int, state_size: int, smoothing_factor: float = 0.0
-    ) -> PPCAMix:
+    def __init(self, n_models: int, state_size: int) -> PPCAMix:
         """Initializes a first guess for the model."""
-        init = PPCAMix.init(n_models, state_size, self.dataset, smoothing_factor)
+        init = PPCAMix.init(n_models, state_size, self.dataset)
         return init
 
     def train(
         self,
         *,
         start: Optional[PPCAMix] = None,
+        prior: Optional[Prior] = None,
         n_models: int,
         state_size: int,
         n_iters: int = 10,
-        smoothing_factor: float = 0.0,
         metric: Literal["aic"] | Literal["bic"] | Literal["llk"] = "aic",
         quiet: bool = False,
     ) -> PPCAMix:
@@ -93,7 +94,7 @@ class PPCAMixTrainer:
         Trains a PPCA mix model for a given state size for a given number of iterations. Use
         `smooth_factor` to control for overfit of dimensions with few samples.
         """
-        model = start or self.__init(n_models, state_size, smoothing_factor)
+        model = start or self.__init(n_models, state_size)
 
         for idx in range(n_iters):
             if not quiet:
@@ -108,7 +109,11 @@ class PPCAMixTrainer:
                     f"Masked PPCA mix iteration {idx + 1}: {metric}={getattr(metrics, metric)}"
                 )
 
-            model = model.iterate(self.dataset)
+            model = (
+                model.iterate_with_prior(self.dataset, prior)
+                if prior is not None
+                else model.iterate(self.dataset)
+            )
 
         return model.to_canonical()
 

@@ -21,13 +21,13 @@ real_model = PPCAMix(
 
 sample = real_model.sample(100, 0.1)
 
-PPCAMixTrainer(sample).train(n_models=1, state_size=2, n_iters=30, smoothing_factor=1.0)
+PPCAMixTrainer(sample).train(n_models=1, state_size=2, n_iters=30)
 print()
-PPCAMixTrainer(sample).train(n_models=2, state_size=2, n_iters=30, smoothing_factor=1.0)
+PPCAMixTrainer(sample).train(n_models=2, state_size=2, n_iters=30)
 print()
-PPCAMixTrainer(sample).train(n_models=3, state_size=2, n_iters=30, smoothing_factor=1.0)
+PPCAMixTrainer(sample).train(n_models=3, state_size=2, n_iters=30)
 print()
-model = PPCAMixTrainer(sample).train(n_models=4, state_size=2, n_iters=30, smoothing_factor=1.0)
+model = PPCAMixTrainer(sample).train(n_models=4, state_size=2, n_iters=30)
 
 model.smooth(sample)
 model.extrapolate(sample)

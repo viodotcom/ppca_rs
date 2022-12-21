@@ -8,6 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::dataset::{Dataset, MaskedSample};
 use crate::ppca_model::{self, InferredMasked, PPCAModel};
+use crate::Prior;
 
 /// Performs Bayesian inference in the log domain.
 fn robust_log_softmax(data: DVector<f64>) -> DVector<f64> {
@@ -72,15 +73,10 @@ impl PPCAMix {
     /// Creates a new random __untrained__ model from a given number of PPCA modes, a latent state
     /// size, a dataset and a smoothing factor. The smoothing factor helps with overfit of rarely
     /// occuring dimensions. If you don't care about that, set it to `0.0`.
-    pub fn init(
-        n_models: usize,
-        state_size: usize,
-        dataset: &Dataset,
-        smoothing_factor: f64,
-    ) -> PPCAMix {
+    pub fn init(n_models: usize, state_size: usize, dataset: &Dataset) -> PPCAMix {
         PPCAMix::new(
             (0..n_models)
-                .map(|_| PPCAModel::init(state_size, dataset, smoothing_factor))
+                .map(|_| PPCAModel::init(state_size, dataset))
                 .collect(),
             vec![0.0; n_models].into(),
         )
@@ -246,7 +242,18 @@ impl PPCAMix {
     /// Makes one iteration of the EM algorithm for the PPCA mixture model over an
     /// observed dataset, returning a improved model. The log-likelihood will **always increase**
     /// for the returned model.
+    #[must_use]
     pub fn iterate(&self, dataset: &Dataset) -> PPCAMix {
+        self.iterate_with_prior(dataset, &Prior::default())
+    }
+
+    /// Makes one iteration of the EM algorithm for the PPCA mixture over an observe
+    /// dataset, using a supplied PPCA prior (same for all constituent PPCA models) and
+    /// returning the improved model. This method will not necessarily increase the
+    /// log-likelihood of the returned model, but it will return an improved _maximum a
+    /// posteriori_ (MAP) estimate of the PPCA model according to the supplied prior.
+    #[must_use]
+    pub fn iterate_with_prior(&self, dataset: &Dataset, prior: &Prior) -> PPCAMix {
         // This is already parallelized internally; no need to further parallelize.
         let llks = self
             .0
@@ -288,7 +295,7 @@ impl PPCAMix {
                     unnorm_posteriors.iter().copied().sum::<f64>().ln() + max_posterior;
                 let dataset = dataset.with_weights(unnorm_posteriors);
 
-                (model.iterate(&dataset), logsum_posteriors)
+                (model.iterate_with_prior(&dataset, prior), logsum_posteriors)
             })
             .unzip();
 

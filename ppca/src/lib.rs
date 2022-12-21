@@ -16,11 +16,13 @@ mod dataset;
 mod mix;
 mod output_covariance;
 mod ppca_model;
+mod prior;
 mod utils;
 
 pub use dataset::{Dataset, MaskedSample};
 pub use mix::{InferredMaskedMix, PPCAMix, PosteriorSamplerMix};
 pub use ppca_model::{InferredMasked, PPCAModel, PosteriorSampler};
+pub use prior::Prior;
 
 #[cfg(test)]
 mod test {
