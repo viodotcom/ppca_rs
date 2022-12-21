@@ -55,6 +55,8 @@ impl Prior {
         self
     }
 
+    /// Impose an independent Normal prior to each dimension of the transformation matrix. The
+    /// precision is the inverse of the variance of the Normal distribution (`1 / sigma ^ 2`).
     pub fn with_transformation_precision(mut self, precision: f64) -> Self {
         assert!(precision >= 0.0);
         self.transformation_precision = precision;
