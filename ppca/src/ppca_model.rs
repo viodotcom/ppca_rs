@@ -387,6 +387,11 @@ impl PPCAModel {
     /// function nor the quality of the training. All it does is to transform the hidden
     /// variables.
     pub fn to_canonical(&self) -> PPCAModel {
+        // Yes, we can have an empty state! In these case, there is nothing to be done.
+        if self.state_size() == 0 {
+            return self.clone();
+        }
+
         let mut svd = self
             .0
             .output_covariance

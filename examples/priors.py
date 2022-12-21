@@ -14,7 +14,7 @@ model = PPCAModel.init(2, sample)
 prior = (
     Prior()
     .with_isotropic_noise_prior(100.0, 100.0)
-    .with_mean_prior(np.array([1.0, 0.0, 1.0], dtype="float64"), 0.001 * np.eye(3, dtype="float64").T)
+    .with_mean_prior(np.array([1.0, 0.0, 1.0], dtype="float64"), 0.0001 * np.eye(3, dtype="float64").T)
 )
 
 for it in range(100):
