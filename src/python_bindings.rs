@@ -12,6 +12,7 @@ use ppca::{
 /// This module is implemented in Rust.
 #[pymodule]
 pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    m.add_class::<PriorWrapper>()?;
     m.add_class::<PPCAModelWrapper>()?;
     m.add_class::<DatasetWrapper>()?;
     m.add_class::<InferredMaskedBatch>()?;
@@ -160,7 +161,7 @@ impl PriorWrapper {
     pub fn with_mean_prior(
         &self,
         py: Python,
-        mean: Py<PyArray2<f64>>,
+        mean: Py<PyArray1<f64>>,
         mean_covariance: Py<PyArray2<f64>>,
     ) -> PyResult<Self> {
         let new = self.0.clone().with_mean_prior(
@@ -170,7 +171,7 @@ impl PriorWrapper {
                 .try_as_matrix()
                 .ok_or_else(|| {
                     pyo3::exceptions::PyException::new_err(
-                        "could not convert transformation ndarray to matrix",
+                        "could not convert mean ndarray to matrix",
                     )
                 })? as DVectorSlice<f64>)
                 .into_owned(),
@@ -180,7 +181,7 @@ impl PriorWrapper {
                 .try_as_matrix()
                 .ok_or_else(|| {
                     pyo3::exceptions::PyException::new_err(
-                        "could not convert transformation ndarray to matrix",
+                        "could not convert mean covariance ndarray to matrix",
                     )
                 })? as DMatrixSlice<f64>)
                 .into_owned(),
