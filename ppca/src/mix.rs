@@ -276,7 +276,11 @@ impl PPCAMix {
             .enumerate()
             .map(|(i, model)| {
                 // Log-posteriors for this particulat model.
-                let log_posteriors: Vec<_> = log_posteriors.par_iter().map(|lp| lp[i]).collect();
+                let log_posteriors: Vec<_> = log_posteriors
+                    .par_iter()
+                    .zip(&dataset.weights)
+                    .map(|(lp, &wi)| wi * lp[i])
+                    .collect();
                 // Let the NaN silently propagate... everything will blow up before this
                 // is all over.
                 let max_posterior: f64 = log_posteriors

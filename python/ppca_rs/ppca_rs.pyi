@@ -5,14 +5,15 @@ import numpy as np
 class Dataset:
     """
     Represents a dataset. This is a wrapper over a 2D array of dimensions
-    (n_samples, n_features).
+    (n_samples, n_features) where each sample (row) is associated with a
+    scalar weight.
 
     ## Note
 
     All arrays involved have to be of data type `float64`.
     """
 
-    def __init__(self, ndarray: np.ndarray) -> None: ...
+    def __init__(self, ndarray: np.ndarray, *, weights: Optional[np.ndarray]) -> None: ...
     def numpy(self) -> np.ndarray:
         """Returns the underlying dataset as a 2D numpy array."""
     @staticmethod
@@ -119,6 +120,11 @@ class Prior:
         """
         Add an isotropic noise prior. The prior is an Inverse Gamma distribution with shape `alpha`
         and rate `beta`.
+        """
+    def with_transformation_precision(self, precision: float) -> Prior:
+        """
+        Impose an independent Normal prior to each dimension of the transformation matrix. The
+        precision is the inverse of the variance of the Normal distribution (`1 / sigma ^ 2`).
         """
 
 class PPCAModel:

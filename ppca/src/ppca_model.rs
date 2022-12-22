@@ -350,11 +350,11 @@ impl PPCAModel {
 
         let isotropic_noise_sq = if prior.has_isotropic_noise_prior() {
             // Note: Inverse gamma inference here...
-            // Recall _mode_ for inverse gamma: 
+            // Recall _mode_ for inverse gamma:
             //     beta_post / (alpha_post + 1)
-            // And... 
+            // And...
             //     beta_post = [sum of all squarey stuff] / 2.0 + beta_prior
-            //     alpha_post = [number of samples] / 2.0 + alpha_prior 
+            //     alpha_post = [number of samples] / 2.0 + alpha_prior
             ((square_error + deviations_square_sum) / 2.0 + prior.isotropic_noise_beta())
                 / (totals.sum() / 2.0 + prior.isotropic_noise_alpha() + 1.0)
         } else {

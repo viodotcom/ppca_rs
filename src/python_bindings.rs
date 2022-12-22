@@ -30,7 +30,12 @@ struct DatasetWrapper(Dataset);
 #[pymethods]
 impl DatasetWrapper {
     #[new]
-    fn new(py: Python, ndarray: PyReadonlyArray2<f64>) -> PyResult<DatasetWrapper> {
+    #[args(weights = "None")]
+    fn new(
+        py: Python,
+        ndarray: PyReadonlyArray2<f64>,
+        weights: Option<PyReadonlyArray1<f64>>,
+    ) -> PyResult<DatasetWrapper> {
         let n_samples = ndarray.shape()[0];
         let output_size = ndarray.shape()[1];
         let array_view = ndarray.as_array();
@@ -46,7 +51,14 @@ impl DatasetWrapper {
                 .collect()
         });
 
-        Ok(DatasetWrapper(Dataset::new(data)))
+        if let Some(weights) = weights {
+            Ok(DatasetWrapper(Dataset::new_with_weights(
+                data,
+                weights.as_array().iter().copied().collect(),
+            )))
+        } else {
+            Ok(DatasetWrapper(Dataset::new(data)))
+        }
     }
 
     #[staticmethod]
