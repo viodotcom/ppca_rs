@@ -101,6 +101,10 @@ impl DatasetWrapper {
         self.0.empty_dimensions()
     }
 
+    fn weights(&self, py: Python<'_>) -> Py<PyArray1<f64>> {
+        self.0.weights.to_pyarray(py).to_owned()
+    }
+
     fn chunks(slf: Py<Self>, py: Python, chunks: usize) -> DatasetChunks {
         let length = slf.borrow(py).0.len();
         DatasetChunks {
