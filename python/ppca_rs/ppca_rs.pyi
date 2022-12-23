@@ -16,6 +16,8 @@ class Dataset:
     def __init__(self, ndarray: np.ndarray, *, weights: Optional[np.ndarray]) -> None: ...
     def numpy(self) -> np.ndarray:
         """Returns the underlying dataset as a 2D numpy array."""
+    def weights(self) -> np.ndarray:
+        """Returns the weight associated with each sample, in order."""
     @staticmethod
     def load(b: bytes) -> Dataset:
         """
