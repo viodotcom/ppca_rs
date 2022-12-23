@@ -279,7 +279,8 @@ impl PPCAMix {
                 let log_posteriors: Vec<_> = log_posteriors
                     .par_iter()
                     .zip(&dataset.weights)
-                    .map(|(lp, &wi)| wi * lp[i])
+                    .filter(|&(_, &wi)| wi > 0.0)
+                    .map(|(lp, &wi)| wi.ln() + lp[i])
                     .collect();
                 // Let the NaN silently propagate... everything will blow up before this
                 // is all over.
