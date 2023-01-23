@@ -323,6 +323,7 @@ impl PPCAMix {
 
 /// The inferred probability distribution in the state space of a given sample of a PPCA Mixture
 /// Model. This class is the analogous of [`InferredMasked`] for the [`PPCAMix`] model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InferredMaskedMix {
     log_posterior: DVector<f64>,
     inferred: Vec<InferredMasked>,

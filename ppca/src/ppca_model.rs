@@ -417,7 +417,7 @@ impl PPCAModel {
 }
 
 /// The inferred probability distribution in the state space of a given sample.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InferredMasked {
     model: PPCAModel,
     state: DVector<f64>,

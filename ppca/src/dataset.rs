@@ -2,7 +2,7 @@ use bit_vec::BitVec;
 use nalgebra::DVector;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{sync::Arc, ops::Index};
 
 use crate::utils::Mask;
 
@@ -51,6 +51,15 @@ impl MaskedSample {
         &self.mask
     }
 
+    /// Returns whether the `idx` dimension in this sample is set.
+    /// 
+    /// # Panics
+    /// 
+    /// This function panics if `idx` is out of bounds.
+    pub fn is_set(&self, idx: usize) -> bool {
+        self.mask.is_set(idx)
+    }
+
     /// Returns the data vector associated with this sample, subsitituting all masked values by `NaN`.
     pub fn masked_vector(&self) -> DVector<f64> {
         self.data
@@ -60,6 +69,17 @@ impl MaskedSample {
             .map(|(value, selected)| if selected { value } else { f64::NAN })
             .collect::<Vec<_>>()
             .into()
+    }
+}
+
+impl Index<usize> for MaskedSample {
+    type Output = f64;
+    fn index(&self, index: usize) -> &Self::Output {
+        if self.is_set(index) {
+            &self.data[index]
+        } else {
+            panic!("Index out of bounds: index {index} is masked in sample")
+        }
     }
 }
 

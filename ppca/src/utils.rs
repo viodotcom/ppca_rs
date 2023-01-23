@@ -49,6 +49,10 @@ impl Mask {
             .map(|(_, element)| element)
     }
 
+    pub fn is_set(&self, idx: usize) -> bool {
+        self.0[idx]
+    }
+
     pub(crate) fn mask(&self, vector: &DVector<f64>) -> DVector<f64> {
         self.filter(vector.data.as_vec())
             .copied()
