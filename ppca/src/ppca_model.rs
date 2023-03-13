@@ -94,8 +94,8 @@ impl PPCAModel {
         self.0.output_covariance.state_size()
     }
 
-    /// Creates a zeroed `InferredMasked` struct that is conpatible with this model.
-    fn uninferred(&self) -> InferredMasked {
+    /// Creates a zeroed `InferredMasked` struct that is compatible with this model.
+    pub fn uninferred(&self) -> InferredMasked {
         InferredMasked {
             model: self.clone(),
             state: DVector::zeros(self.state_size()),

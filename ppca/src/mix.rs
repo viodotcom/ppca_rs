@@ -188,6 +188,19 @@ impl PPCAMix {
         DMatrix::from_rows(&*rows)
     }
 
+    /// Creates a zeroed `InferredMasked` struct that is compatible with this model. This
+    /// returns the _prior_ associated with this model.
+    pub fn uninferred(&self) -> InferredMaskedMix {
+        InferredMaskedMix {
+            log_posterior: self.log_weights().clone(),
+            inferred: self
+                .models()
+                .iter()
+                .map(|model| model.uninferred())
+                .collect::<Vec<_>>(),
+        }
+    }
+
     /// Infers the probability distribution of a single sample.
     pub fn infer_one(&self, sample: &MaskedSample) -> InferredMaskedMix {
         InferredMaskedMix {

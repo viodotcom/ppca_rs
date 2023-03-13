@@ -2,7 +2,7 @@ use bit_vec::BitVec;
 use nalgebra::DVector;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
-use std::{sync::Arc, ops::Index};
+use std::{ops::Index, sync::Arc};
 
 use crate::utils::Mask;
 
@@ -52,9 +52,9 @@ impl MaskedSample {
     }
 
     /// Returns whether the `idx` dimension in this sample is set.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This function panics if `idx` is out of bounds.
     pub fn is_set(&self, idx: usize) -> bool {
         self.mask.is_set(idx)
