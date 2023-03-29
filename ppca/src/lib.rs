@@ -1,7 +1,7 @@
 //! This crate implements a _Probabilistic Principal Component Analysis_ in pure Rust, based on a
 //! legacy Python version, which was just too slow for the job (even with `numpy` "C code" to spice it up!)
 //!
-//! If you want all the comfort that the Python ecossystem can provide, you are welcome to check out the
+//! If you want all the comfort that the Python ecosystem can provide, you are welcome to check out the
 //! python wrapper in [PyPI](https://pypi.org/project/ppca-rs/0.3.1/). However, if you want top performance
 //! and great debugging support, this crate is for you.
 //!

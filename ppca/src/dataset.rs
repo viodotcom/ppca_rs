@@ -60,7 +60,7 @@ impl MaskedSample {
         self.mask.is_set(idx)
     }
 
-    /// Returns the data vector associated with this sample, subsitituting all masked values by `NaN`.
+    /// Returns the data vector associated with this sample, substituting all masked values by `NaN`.
     pub fn masked_vector(&self) -> DVector<f64> {
         self.data
             .iter()
@@ -175,7 +175,7 @@ impl Dataset {
         }
     }
 
-    /// The lenght of this dataset.
+    /// The length of this dataset.
     pub fn len(&self) -> usize {
         self.data.len()
     }

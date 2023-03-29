@@ -72,7 +72,7 @@ impl PPCAMix {
 
     /// Creates a new random __untrained__ model from a given number of PPCA modes, a latent state
     /// size, a dataset and a smoothing factor. The smoothing factor helps with overfit of rarely
-    /// occuring dimensions. If you don't care about that, set it to `0.0`.
+    /// occurring dimensions. If you don't care about that, set it to `0.0`.
     pub fn init(n_models: usize, state_size: usize, dataset: &Dataset) -> PPCAMix {
         PPCAMix::new(
             (0..n_models)
@@ -108,22 +108,22 @@ impl PPCAMix {
         &self.0.models
     }
 
-    /// The log-strength (or log-_a priori_ probablilty) for each PPCA model.
+    /// The log-strength (or log-_a priori_ probability) for each PPCA model.
     pub fn log_weights(&self) -> &DVector<f64> {
         &self.0.log_weights
     }
 
-    /// The strength (or _a priori_ probablilty) for each PPCA model.
+    /// The strength (or _a priori_ probability) for each PPCA model.
     pub fn weights(&self) -> DVector<f64> {
         self.0.log_weights.map(f64::exp)
     }
 
     /// Sample a full dataset from the PPCA model and masks each entry according to a
-    /// Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+    /// Bernoulli (coin-toss) distribution of probability `mask_prob` of erasing the
     /// generated value.
     pub fn sample(&self, dataset_size: usize, mask_probability: f64) -> Dataset {
         let index = WeightedIndex::new(self.0.log_weights.iter().copied().map(f64::exp))
-            .expect("can create WeigtedIndex from distribution");
+            .expect("can create WeighedIndex from distribution");
         (0..dataset_size)
             .into_par_iter()
             .map(|_| {
@@ -173,7 +173,7 @@ impl PPCAMix {
             .sum::<f64>()
     }
 
-    /// Returns the _posterior_ distribution (i.e., with Baye's rule applied) for each sample in
+    /// Returns the _posterior_ distribution (i.e., with Bayes' rule applied) for each sample in
     /// the given dataset. Each row of the matrix corresponds to a categorical distribution on the
     /// probability of a sample belonging to a particular PPCA model.
     pub fn infer_cluster(&self, dataset: &Dataset) -> DMatrix<f64> {
@@ -288,7 +288,7 @@ impl PPCAMix {
             .iter()
             .enumerate()
             .map(|(i, model)| {
-                // Log-posteriors for this particulat model.
+                // Log-posteriors for this particular model.
                 let log_posteriors: Vec<_> = log_posteriors
                     .par_iter()
                     .zip(&dataset.weights)
@@ -303,7 +303,7 @@ impl PPCAMix {
                     .max()
                     .expect("dataset not empty")
                     .into();
-                // Use unnormalized posteriors as weights for numerical stability. One of
+                // Use un-normalized posteriors as weights for numerical stability. One of
                 // the entries is guaranteed to be 1.0.
                 let unnorm_posteriors: Vec<_> = log_posteriors
                     .par_iter()
@@ -362,7 +362,7 @@ impl InferredMaskedMix {
             .sum()
     }
 
-    /// The covariance matrices of the posterion distribution in the state space.
+    /// The covariance matrices of the posterior distribution in the state space.
     pub fn covariance(&self) -> DMatrix<f64> {
         let mean = self.state();
         self.inferred
@@ -382,7 +382,7 @@ impl InferredMaskedMix {
             .iter()
             .zip(&self.posterior())
             .zip(&mix.0.models)
-            .map(|((infered, &weight), ppca)| weight * infered.smoothed(ppca))
+            .map(|((inferred, &weight), ppca)| weight * inferred.smoothed(ppca))
             .sum::<DVector<f64>>()
     }
 
@@ -392,7 +392,7 @@ impl InferredMaskedMix {
             .iter()
             .zip(&self.posterior())
             .zip(&mix.0.models)
-            .map(|((infered, &weight), ppca)| weight * infered.extrapolated(ppca, sample))
+            .map(|((inferred, &weight), ppca)| weight * inferred.extrapolated(ppca, sample))
             .sum::<DVector<f64>>()
     }
 
@@ -429,10 +429,10 @@ impl InferredMaskedMix {
             .iter()
             .zip(&self.posterior())
             .zip(&mix.0.models)
-            .map(|((infered, &weight), ppca)| {
+            .map(|((inferred, &weight), ppca)| {
                 weight
-                    * (infered.smoothed_covariance_diagonal(ppca)
-                        + (infered.smoothed(ppca) - &mean).map(|v| v.powi(2)))
+                    * (inferred.smoothed_covariance_diagonal(ppca)
+                        + (inferred.smoothed(ppca) - &mean).map(|v| v.powi(2)))
             })
             .sum()
     }
@@ -475,15 +475,15 @@ impl InferredMaskedMix {
             .iter()
             .zip(&self.posterior())
             .zip(&mix.0.models)
-            .map(|((infered, &weight), ppca)| {
+            .map(|((inferred, &weight), ppca)| {
                 weight
-                    * (infered.extrapolated_covariance_diagonal(ppca, sample)
-                        + (infered.extrapolated(ppca, sample) - &mean).map(|v| v.powi(2)))
+                    * (inferred.extrapolated_covariance_diagonal(ppca, sample)
+                        + (inferred.extrapolated(ppca, sample) - &mean).map(|v| v.powi(2)))
             })
             .sum()
     }
 
-    /// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+    /// Samples from the posterior distribution of an inferred sample. The sample is smoothed, that
     /// is, it does not include the model isotropic noise.
     pub fn posterior_sampler(&self) -> PosteriorSamplerMix {
         let index = WeightedIndex::new(self.posterior().iter().copied())
@@ -497,7 +497,7 @@ impl InferredMaskedMix {
     }
 }
 
-/// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+/// Samples from the posterior distribution of an inferred sample. The sample is smoothed, that
 /// is, it does not include the model isotropic noise.
 pub struct PosteriorSamplerMix {
     index: WeightedIndex<f64>,

@@ -23,12 +23,12 @@ pub struct PPCAModelInner {
 
 /// A PPCA model which can infer missing values.
 ///
-/// Eeach sample for this model behaves according to the following
+/// Each sample for this model behaves according to the following
 /// statistical latent variable model.
 /// ```
 /// x ~ N(0; I(nxn))
 /// y = C * x + y0 + noise
-/// noise ~ N(0; sgima ^ 2 * I(mxm))
+/// noise ~ N(0; sigma ^ 2 * I(mxm))
 /// ```
 /// Here, `x` is the latent state, y is the observed sample, that is an affine
 /// transformation of the hidden state contaminated by isotropic noise.
@@ -159,7 +159,7 @@ impl PPCAModel {
     }
 
     /// Sample a single sample from the PPCA model and masks each entry according to a
-    /// Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+    /// Bernoulli (coin-toss) distribution of probability `mask_prob` of erasing the
     /// generated value.
     pub fn sample_one(&self, mask_prob: f64) -> MaskedSample {
         let sampled_state: DVector<f64> =
@@ -181,7 +181,7 @@ impl PPCAModel {
     }
 
     /// Sample a full dataset from the PPCA model and masks each entry according to a
-    /// Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+    /// Bernoulli (coin-toss) distribution of probability `mask_prob` of erasing the
     /// generated value.
     pub fn sample(&self, dataset_size: usize, mask_prob: f64) -> Dataset {
         (0..dataset_size)
@@ -223,7 +223,7 @@ impl PPCAModel {
         MaskedSample::unmasked(self.infer_one(sample).smoothed(&self))
     }
 
-    /// Filters each sample of a given datatset, removing noise from the extant samples and
+    /// Filters each sample of a given dataset, removing noise from the extant samples and
     /// inferring the missing samples.
     pub fn smooth(&self, dataset: &Dataset) -> Dataset {
         dataset
@@ -383,7 +383,7 @@ impl PPCAModel {
         }))
     }
 
-    /// Returns a canonical version of this model. This does not alter the log-probablility
+    /// Returns a canonical version of this model. This does not alter the log-probability
     /// function nor the quality of the training. All it does is to transform the hidden
     /// variables.
     pub fn to_canonical(&self) -> PPCAModel {
@@ -498,7 +498,7 @@ impl InferredMasked {
             .into()
     }
 
-    /// The covariance for the extraplated values for a given output model and extant values in a given
+    /// The covariance for the extrapolated values for a given output model and extant values in a given
     /// sample.
     ///
     /// # Note:
@@ -567,7 +567,7 @@ impl InferredMasked {
         negative.expand(&diagonal_reduced)
     }
 
-    /// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+    /// Samples from the posterior distribution of an inferred sample. The sample is smoothed, that
     /// is, it does not include the model isotropic noise.
     pub fn posterior_sampler(&self) -> PosteriorSampler {
         let cholesky = self
@@ -583,7 +583,7 @@ impl InferredMasked {
     }
 }
 
-/// Samples from the posterior distribution of an infered sample. The sample is smoothed, that
+/// Samples from the posterior distribution of an inferred sample. The sample is smoothed, that
 /// is, it does not include the model isotropic noise.
 pub struct PosteriorSampler {
     model: PPCAModel,

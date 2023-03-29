@@ -387,7 +387,7 @@ impl PPCAModelWrapper {
             "PPCAModel(\
                 isotropic_noise={}, \
                 transform=array({}, dtype=\"float32\"), \
-                mean=narray({}, dtype=\"float32\"))",
+                mean=array({}, dtype=\"float32\"))",
             self.isotropic_noise(),
             self.transform(py),
             self.mean(py),
