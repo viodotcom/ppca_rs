@@ -1,4 +1,4 @@
-use nalgebra::{DMatrix, DMatrixSlice, DVectorSlice};
+use nalgebra::DMatrix;
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::{prelude::*, types::PyBytes};
 use rand_distr::Distribution;
@@ -8,6 +8,8 @@ use ppca::{
     Dataset, InferredMasked, InferredMaskedMix, MaskedSample, PPCAMix, PPCAModel, PosteriorSampler,
     PosteriorSamplerMix, Prior,
 };
+
+use crate::utils::{to_nalgebra, to_nalgebra_vector};
 
 /// This module is implemented in Rust.
 #[pymodule]
@@ -30,7 +32,7 @@ struct DatasetWrapper(Dataset);
 #[pymethods]
 impl DatasetWrapper {
     #[new]
-    #[args(weights = "None")]
+    #[pyo3(signature = (ndarray, weights = None))]
     fn new(
         py: Python,
         ndarray: PyReadonlyArray2<f64>,
@@ -177,30 +179,12 @@ impl PriorWrapper {
     pub fn with_mean_prior(
         &self,
         py: Python,
-        mean: Py<PyArray1<f64>>,
+        mean: Py<PyArray2<f64>>,
         mean_covariance: Py<PyArray2<f64>>,
     ) -> PyResult<Self> {
         let new = self.0.clone().with_mean_prior(
-            (mean
-                .as_ref(py)
-                .try_readonly()?
-                .try_as_matrix()
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyException::new_err(
-                        "could not convert mean ndarray to matrix",
-                    )
-                })? as DVectorSlice<f64>)
-                .into_owned(),
-            (mean_covariance
-                .as_ref(py)
-                .try_readonly()?
-                .try_as_matrix()
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyException::new_err(
-                        "could not convert mean covariance ndarray to matrix",
-                    )
-                })? as DMatrixSlice<f64>)
-                .into_owned(),
+            to_nalgebra_vector(py, mean),
+            to_nalgebra(py, mean_covariance),
         );
         Ok(PriorWrapper(new))
     }
@@ -396,26 +380,8 @@ impl PPCAModelWrapper {
     ) -> PyResult<PPCAModelWrapper> {
         Ok(PPCAModelWrapper(PPCAModel::new(
             isotropic_noise,
-            (transform
-                .as_ref(py)
-                .try_readonly()?
-                .try_as_matrix()
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyException::new_err(
-                        "could not convert transformation ndarray to matrix",
-                    )
-                })? as DMatrixSlice<f64>)
-                .into_owned(),
-            (mean
-                .as_ref(py)
-                .try_readonly()?
-                .try_as_matrix()
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyException::new_err(
-                        "could not convert mean ndarray to matrix",
-                    )
-                })? as DVectorSlice<f64>)
-                .into_owned(),
+            to_nalgebra(py, transform),
+            to_nalgebra_vector(py, mean),
         )))
     }
 
@@ -937,25 +903,3 @@ impl PosteriorSamplerMixBatch {
         DatasetWrapper(samples)
     }
 }
-
-// #[pyclass]
-// #[pyo3(name = "DataFrameAdapter", module = "ppca_rs")]
-// #[derive(Debug, Clone)]
-// struct DataFrameAdapterWrapper(DataFrameAdapter);
-
-// #[pymethods]
-// impl DataFrameAdapterWrapper {
-//     #[staticmethod]
-//     fn build(
-//         df: &PyAny,
-//         keys: Vec<String>,
-//         dimensions: Vec<String>,
-//         metric: String,
-//     ) -> PyResult<DataFrameAdapterWrapper>{
-//         let df = crate::polars_python_hack::array_to_rust(df)?;
-
-//         Ok(DataFrameAdapterWrapper(
-//             DataFrameAdapter::build(df, keys, dimensions, metric)?
-//         ))
-//     }
-// }

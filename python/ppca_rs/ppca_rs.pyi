@@ -136,7 +136,7 @@ class PPCAModel:
     ```
     x ~ N(0; I(nxn))
     y = C * x + y0 + noise
-    noise ~ N(0; sgima ^ 2 * I(mxm))
+    noise ~ N(0; sigma ^ 2 * I(mxm))
     ```
     Here, `x` is the latent state, y is the observed sample, that is an affine
     transformation of the hidden state contaminated by isotropic noise.
@@ -163,7 +163,7 @@ class PPCAModel:
     smoothing_factor: float
     """
     A factor to smooth out the `transform` matrix when there is little data for a given
-    dimension. Use this as an extra guard aginst overfitting.
+    dimension. Use this as an extra guard against over-fitting.
     """
     singular_values: np.ndarray
     """
@@ -189,7 +189,7 @@ class PPCAModel:
         """
     @staticmethod
     def init(n_states: int, smoothing_factor: float = 0.0) -> PPCAModel:
-        """Creates an uninformed random model to seed the trainment."""
+        """Creates an uninformed random model to seed the trainement."""
     def __repr__(self) -> str: ...
     def llk(self, dataset: Dataset) -> float:
         """
@@ -204,7 +204,7 @@ class PPCAModel:
     def sample(self, dataset_size: int, mask_prob: float) -> Dataset:
         """
         Samples random outputs from the model and masks each entry according to a
-        Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+        Bernoulli (coin-toss) distribution of probability `mask_prob` of erasing the
         generated value.
         """
     def infer(self, dataset: Dataset) -> InferredMasked:
@@ -234,7 +234,7 @@ class PPCAModel:
         """
     def to_canonical(self) -> PPCAModel:
         """
-        Returns a canonical version of this model. This does not alter the log-probablility
+        Returns a canonical version of this model. This does not alter the log-probability
         function nor the quality of the training. All it does is to transform the hidden
         variables.
         """
@@ -292,8 +292,8 @@ class InferredMaskedMix:
         self, model: PPCAModel, dataset: Dataset
     ) -> Dataset:
         """
-        Returns an _approximation_ of the extrapolated output covariance matrix, treating each masked
-        output as an independent normal distribution.
+        Returns an _approximation_ of the extrapolated output covariance matrix, treating each
+        masked output as an independent normal distribution.
 
         # Note
 
@@ -331,14 +331,14 @@ class PPCAMix:
     n_parameters: int
     """The total number of parameters involved in training (used for information criteria)."""
     models: List[PPCAModel]
-    """The constituent PPCA models of this PPPCA mixture."""
+    """The constituent PPCA models of this PPCA mixture."""
     log_weights: np.ndarray
     """The log-probabilities of each constituent PPCA models for this PPCA mixture."""
     weights: np.ndarray
     """The probabilities of each constituent PPCA models for this PPCA mixture."""
 
     @staticmethod
-    def load(b: bytes) -> PPCAModel:
+    def load(b: bytes) -> PPCAMix:
         """
         Loads a PPCA mixture model from binary data. Use this if you want to avoid picking.
         """
@@ -352,9 +352,9 @@ class PPCAMix:
         n_models: int,
         n_states: int,
         smoothing_factor: float = 0.0,
-    ) -> PPCAModel:
+    ) -> PPCAMix:
         """
-        Creates an uninformed random model to seed the trainment. All constituent models
+        Creates an uninformed random model to seed the trainement. All constituent models
         will have the same state size.
         """
     def __repr__(self) -> str: ...
@@ -371,7 +371,7 @@ class PPCAMix:
     def sample(self, dataset_size: int, mask_prob: float) -> Dataset:
         """
         Samples random outputs from the model and masks each entry according to a
-        Bernoulli (coin-toss) distribution of proability `mask_prob` of erasing the
+        Bernoulli (coin-toss) distribution of probability `mask_prob` of erasing the
         generated value.
         """
     def infer(self, dataset: Dataset) -> InferredMaskedMix:
@@ -401,7 +401,7 @@ class PPCAMix:
         """
     def to_canonical(self) -> PPCAMix:
         """
-        Returns a canonical version of this model. This does not alter the log-probablility
+        Returns a canonical version of this model. This does not alter the log-probability
         function nor the quality of the training. All it does is to transform the hidden
         variables.
         """

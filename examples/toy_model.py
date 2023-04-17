@@ -3,9 +3,9 @@ import numpy as np
 from ppca_rs import PPCAModel
 
 real_model = PPCAModel(
-    transform=np.matrix([[1, 1, 0], [1, 0, 1]], dtype="float64").T,
+    transform=np.array([[1, 1], [0, 1], [0, 1]], dtype="float64"),
     isotropic_noise=0.1,
-    mean=np.array([[0, 1, 0]], dtype="float64").T,
+    mean=np.array([[0], [1], [0]], dtype="float64"),
 )
 sample = real_model.sample(100, mask_prob=0.2)
 model = PPCAModel.init(2, sample)

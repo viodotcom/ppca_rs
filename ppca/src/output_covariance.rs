@@ -78,13 +78,13 @@ impl<'a> OutputCovariance<'a> {
     /// `C^T * (sigma^2*I + C*C^T)^-1`, we have a pesky inverse to calculate! Thankfully,
     /// we can use the Woodbury identity to the rescue!
     /// ```
-    /// (sigma^2*I + C*C^T)^-1 = I/sigma^2 - C/sigma^2*(I + C^T*C/sigma^2)^-1*C^T
+    /// (sigma^2*I + C*C^T)^-1 = I/sigma^2 - C/sigma^2*(I + C^T*C/sigma^2)^-1*C^T/sigma^2
     /// ```
     /// The trick is that the new inverse that we have to calculate has only the
     /// dimension of the _hidden_ state and therefore, goes much faster. The full
     /// estimator is given by:
     /// ```
-    /// C^T/sigma^2 - C^T*C/sigma^2*(I + C^T*C/sigma^2)^-1*C^T
+    /// C^T/sigma^2 - C^T*C/sigma^2*(I + C^T*C/sigma^2)^-1*C^T/sigma^2
     /// ```
     /// Which can be calculated in `O(output_length * state_length^3)`.
     pub(crate) fn estimator_transform(&self) -> DMatrix<f64> {
