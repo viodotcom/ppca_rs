@@ -331,7 +331,7 @@ checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
 
 [[package]]
 name = "ppca"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "approx",
  "bit-vec",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "ppca_rs"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bincode",
  "nalgebra",

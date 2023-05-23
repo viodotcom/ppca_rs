@@ -596,11 +596,23 @@ impl Distribution<DVector<f64>> for PosteriorSampler {
     where
         R: Rng + ?Sized,
     {
+        // State noise:
         let standard: DVector<f64> = (0..self.state.len())
             .map(|_| rand_distr::StandardNormal.sample(rng))
             .collect::<Vec<_>>()
             .into();
-        self.model.mean() + self.model.transform() * (&self.state + &self.cholesky_l * standard)
+        // Output noise:
+        let noise: DVector<f64> = (0..self.model.output_size())
+            .map(|_| {
+                let standard: f64 = rand_distr::StandardNormal.sample(rng);
+                self.model.0.output_covariance.isotropic_noise * standard
+            })
+            .collect::<Vec<_>>()
+            .into();
+
+        noise
+            + self.model.mean()
+            + self.model.transform() * (&self.state + &self.cholesky_l * standard)
     }
 }
 

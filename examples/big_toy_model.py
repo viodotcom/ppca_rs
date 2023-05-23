@@ -5,12 +5,12 @@ print("Generating model")
 
 transform = np.random.binomial(1.0, 0.1, size=(200, 16))
 real_model = PPCAModel(
-    transform=np.matrix(transform, dtype="float64").T.T,
+    transform=np.matrix(transform, dtype="float64"),
     isotropic_noise=0.1,
     mean=np.zeros((200, 1), dtype="float64"),
 )
 
-print("Generating syntetic sample")
+print("Generating synthetic sample")
 sample = real_model.sample(100_000, 0.2)
 
 print("Initializing model")
