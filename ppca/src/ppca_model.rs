@@ -143,7 +143,7 @@ impl PPCAModel {
         dataset
             .data
             .par_iter()
-            .zip(&dataset.weights)
+            .zip(&*dataset.weights)
             .map(|(sample, weight)| self.llk_one(sample) * weight)
             .sum()
     }
@@ -174,10 +174,7 @@ impl PPCAModel {
                 .collect::<BitVec>(),
         );
 
-        MaskedSample {
-            data: mask.fillna(&(sampled_state + noise)),
-            mask,
-        }
+        MaskedSample::new(mask.fillna(&(sampled_state + noise)), mask)
     }
 
     /// Sample a full dataset from the PPCA model and masks each entry according to a
@@ -197,13 +194,39 @@ impl PPCAModel {
             return self.uninferred();
         }
 
-        let sub_sample = sample.mask.mask(&(sample.data_vector() - &self.0.mean));
-        let sub_covariance = self.0.output_covariance.masked(&sample.mask);
+        let mean = if let Some(prior_mean) = &sample.prior_mean {
+            &self.0.mean + &*self.0.output_covariance.transform * prior_mean
+        } else {
+            self.0.mean.clone()
+        };
 
-        InferredMasked {
-            model: self.clone(),
-            state: sub_covariance.estimator_transform() * sub_sample,
-            covariance: sub_covariance.estimator_covariance(),
+        let sub_sample = sample.mask.mask(&(sample.data_vector() - mean));
+
+        if let Some(prior_cov) = &sample.prior_cov {
+            let chol = prior_cov
+                .clone()
+                .cholesky()
+                .expect("Prior should be Cholesky-decomposable");
+            let l = chol.l();
+
+            let sub_covariance = self
+                .0
+                .output_covariance
+                .masked(&sample.mask)
+                .transform_state(&l);
+
+            InferredMasked {
+                model: self.clone(),
+                state: &l * sub_covariance.estimator_transform() * sub_sample,
+                covariance: &l * sub_covariance.estimator_covariance() * l.transpose(),
+            }
+        } else {
+            let sub_covariance = self.0.output_covariance.masked(&sample.mask);
+            InferredMasked {
+                model: self.clone(),
+                state: sub_covariance.estimator_transform() * sub_sample,
+                covariance: sub_covariance.estimator_covariance(),
+            }
         }
     }
 
@@ -229,7 +252,7 @@ impl PPCAModel {
         dataset
             .data
             .par_iter()
-            .zip(&dataset.weights)
+            .zip(&*dataset.weights)
             .map(|(sample, &weight)| (self.smooth_one(sample), weight))
             .collect()
     }
@@ -246,7 +269,7 @@ impl PPCAModel {
         dataset
             .data
             .par_iter()
-            .zip(&dataset.weights)
+            .zip(&*dataset.weights)
             .map(|(sample, &weight)| (self.extrapolate_one(sample), weight))
             .collect()
     }
@@ -272,7 +295,7 @@ impl PPCAModel {
         let total_cross_moment = dataset
             .data
             .par_iter()
-            .zip(&dataset.weights)
+            .zip(&*dataset.weights)
             .zip(&inferred)
             .map(|((sample, &weight), inferred)| {
                 let centered_filled = sample.mask.fillna(&(sample.data_vector() - &self.0.mean));
@@ -288,7 +311,7 @@ impl PPCAModel {
                 let total_second_moment = dataset
                     .data
                     .iter()
-                    .zip(&dataset.weights)
+                    .zip(&*dataset.weights)
                     .zip(&inferred)
                     .filter(|((sample, _), _)| sample.mask.0[idx])
                     .map(|((_, &weight), inferred)| weight * inferred.second_moment())
@@ -319,7 +342,7 @@ impl PPCAModel {
         let (square_error, deviations_square_sum, total_deviation, totals) = dataset
             .data
             .par_iter()
-            .zip(&dataset.weights)
+            .zip(&*dataset.weights)
             .zip(&inferred)
             .filter(|((sample, _), _)| !sample.is_empty())
             .map(
@@ -664,9 +687,9 @@ mod test {
     #[test]
     fn test_llk() {
         let model = toy_model();
-        dbg!(model.llk(&Dataset::new(vec![MaskedSample {
-            data: dvector![1.0, 2.0, 3.0],
-            mask: Mask(BitVec::from_elem(3, true)),
-        }])));
+        dbg!(model.llk(&Dataset::new(vec![MaskedSample::new(
+            dvector![1.0, 2.0, 3.0],
+            Mask(BitVec::from_elem(3, true))
+        )])));
     }
 }
