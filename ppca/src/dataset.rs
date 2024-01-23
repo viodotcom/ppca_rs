@@ -1,5 +1,5 @@
 use bit_vec::BitVec;
-use nalgebra::DVector;
+use nalgebra::{DMatrix, DVector};
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use std::{ops::Index, sync::Arc};
@@ -11,6 +11,8 @@ use crate::utils::Mask;
 pub struct MaskedSample {
     pub(crate) data: DVector<f64>,
     pub(crate) mask: Mask,
+    pub(crate) prior_mean: Option<DVector<f64>>,
+    pub(crate) prior_cov: Option<DMatrix<f64>>,
 }
 
 impl MaskedSample {
@@ -24,7 +26,12 @@ impl MaskedSample {
     /// Creates a masked sample from data and a mask. The value is considered missing if its index
     /// in the masked is set to `false`.
     pub fn new(data: DVector<f64>, mask: Mask) -> MaskedSample {
-        MaskedSample { data, mask }
+        MaskedSample {
+            data,
+            mask,
+            prior_mean: None,
+            prior_cov: None,
+        }
     }
 
     /// Creates a sample without any masked values.
@@ -32,6 +39,18 @@ impl MaskedSample {
         MaskedSample {
             mask: Mask::unmasked(data.len()),
             data,
+            prior_cov: None,
+            prior_mean: None,
+        }
+    }
+
+    /// Associates a prior to this sample:
+    pub fn with_prior(self, prior_mean: DVector<f64>, prior_cov: DMatrix<f64>) -> Self {
+        MaskedSample {
+            mask: self.mask,
+            data: self.data,
+            prior_mean: Some(prior_mean),
+            prior_cov: Some(prior_cov),
         }
     }
 
@@ -96,13 +115,13 @@ pub struct Dataset {
     /// The weights associated with each sample. Use this only if you are using the PPCA as a
     /// component of a greater EM scheme (or otherwise know what you are doing). Else, let the
     /// package set it automatically to 1.
-    pub weights: Vec<f64>,
+    pub weights: Arc<Vec<f64>>,
 }
 
 impl From<Vec<MaskedSample>> for Dataset {
     fn from(value: Vec<MaskedSample>) -> Self {
         Dataset {
-            weights: vec![1.0; value.len()],
+            weights: Arc::new(vec![1.0; value.len()]),
             data: Arc::new(value),
         }
     }
@@ -152,7 +171,7 @@ impl Dataset {
     /// Creates a new dataset from a set of masked samples.
     pub fn new(data: Vec<MaskedSample>) -> Dataset {
         Dataset {
-            weights: vec![1.0; data.len()],
+            weights: Arc::new(vec![1.0; data.len()]),
             data: Arc::new(data),
         }
     }
@@ -162,17 +181,47 @@ impl Dataset {
         assert_eq!(data.len(), weights.len());
         Dataset {
             data: Arc::new(data),
-            weights,
+            weights: Arc::new(weights),
         }
     }
 
     /// Creates a new dataset with the same sample, but with different weights. This operation is
     /// cheap, since it does not clone the dataset (it's protected by an `Arc`).
-    pub fn with_weights(&self, weights: Vec<f64>) -> Dataset {
+    pub fn with_weights(self, weights: Vec<f64>) -> Dataset {
         Dataset {
-            data: self.data.clone(),
-            weights,
+            data: self.data,
+            weights: Arc::new(weights),
         }
+    }
+
+    pub fn with_priors(
+        mut self,
+        prior_means: Vec<DVector<f64>>,
+        prior_covs: Vec<DMatrix<f64>>,
+    ) -> Dataset {
+        assert_eq!(
+            self.data.len(),
+            prior_means.len(),
+            "Prior mean length mismatch"
+        );
+        assert_eq!(
+            self.data.len(),
+            prior_covs.len(),
+            "Prior cov length mismatch"
+        );
+
+        let mut new_data = vec![];
+        self.data
+            .par_iter()
+            .zip(prior_means)
+            .zip(prior_covs)
+            .map(|((sample, prior_mean), prior_cov)| {
+                sample.clone().with_prior(prior_mean, prior_cov)
+            })
+            .collect_into_vec(&mut new_data);
+
+        self.data = Arc::new(new_data);
+        self
     }
 
     /// The length of this dataset.
@@ -193,7 +242,7 @@ impl Dataset {
     /// Lists the dimensions which as masked in __all__ samples in this dataset.
     pub fn empty_dimensions(&self) -> Vec<usize> {
         let Some(n_dimensions) = self.data.first().map(|sample| sample.mask().0.len()) else {
-            return vec![]
+            return vec![];
         };
         let new_mask = || BitVec::from_elem(n_dimensions, false);
         let poormans_or = |mut this: BitVec, other: &BitVec| {

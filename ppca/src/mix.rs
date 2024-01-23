@@ -168,7 +168,7 @@ impl PPCAMix {
         dataset
             .data
             .par_iter()
-            .zip(&dataset.weights)
+            .zip(&*dataset.weights)
             .map(|(sample, &weight)| weight * self.llk_one(sample))
             .sum::<f64>()
     }
@@ -291,7 +291,7 @@ impl PPCAMix {
                 // Log-posteriors for this particular model.
                 let log_posteriors: Vec<_> = log_posteriors
                     .par_iter()
-                    .zip(&dataset.weights)
+                    .zip(&*dataset.weights)
                     .filter(|&(_, &wi)| wi > 0.0)
                     .map(|(lp, &wi)| wi.ln() + lp[i])
                     .collect();
@@ -311,7 +311,7 @@ impl PPCAMix {
                     .collect();
                 let logsum_posteriors =
                     unnorm_posteriors.iter().copied().sum::<f64>().ln() + max_posterior;
-                let dataset = dataset.with_weights(unnorm_posteriors);
+                let dataset = dataset.clone().with_weights(unnorm_posteriors);
 
                 (model.iterate_with_prior(&dataset, prior), logsum_posteriors)
             })

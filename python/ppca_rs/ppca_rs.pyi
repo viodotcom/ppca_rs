@@ -29,6 +29,10 @@ class Dataset:
         """
     def __len__(self) -> int: ...
     def is_empty(self) -> bool: ...
+    def with_priors(self, prior_means: np.ndarray, prior_covs: np.ndarray) -> Dataset:
+        """
+
+        """
     def empty_dimensions(self) -> List[int]:
         """
         Returns the dimensions which have only masked values for all samples in this
@@ -188,7 +192,7 @@ class PPCAModel:
         picking.
         """
     @staticmethod
-    def init(n_states: int, smoothing_factor: float = 0.0) -> PPCAModel:
+    def init(state_size: int, dataset: Dataset) -> PPCAModel:
         """Creates an uninformed random model to seed the trainement."""
     def __repr__(self) -> str: ...
     def llk(self, dataset: Dataset) -> float:
@@ -348,13 +352,9 @@ class PPCAMix:
         picking.
         """
     @staticmethod
-    def init(
-        n_models: int,
-        n_states: int,
-        smoothing_factor: float = 0.0,
-    ) -> PPCAMix:
+    def init(n_models: int, state_size: int, dataset: Dataset) -> PPCAMix:
         """
-        Creates an uninformed random model to seed the trainement. All constituent models
+        Creates an uninformed random model to seed the trainment. All constituent models
         will have the same state size.
         """
     def __repr__(self) -> str: ...

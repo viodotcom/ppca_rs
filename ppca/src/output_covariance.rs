@@ -130,6 +130,13 @@ impl<'a> OutputCovariance<'a> {
         }
     }
 
+    pub(crate) fn transform_state(&self, transform: &DMatrix<f64>) -> OutputCovariance<'static> {
+        OutputCovariance {
+            isotropic_noise: self.isotropic_noise,
+            transform: Cow::Owned(&*self.transform * transform),
+        }
+    }
+
     pub(crate) fn quadratic_form(&self, x: &DVector<f64>) -> f64 {
         let norm_squared = x.norm_squared();
         let transpose_transformed = self.transform.transpose() * x;
