@@ -207,6 +207,15 @@ impl PPCAModel {
         }
     }
 
+    /// Builds a new [`InferredMasked`] from the raw values.
+    pub fn inferred_one(&self, state: DVector<f64>, covariance: DMatrix<f64>) -> InferredMasked {
+        InferredMasked {
+            model: self.clone(),
+            state,
+            covariance,
+        }
+    }
+
     /// Infers the hidden components for each sample in the dataset. Use this method for
     /// fine-grain control on the properties you want to extract from the model.
     pub fn infer(&self, dataset: &Dataset) -> Vec<InferredMasked> {

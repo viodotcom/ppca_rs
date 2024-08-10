@@ -353,6 +353,11 @@ impl InferredMaskedMix {
         self.log_posterior.map(f64::exp)
     }
 
+    /// A slice of the [`InferredMasked`] for each constituent model in the mixture. 
+    pub fn sub_states(&self) -> &[InferredMasked] {
+        &self.inferred
+    }
+
     /// The mean of the posterior distribution in the state space.
     pub fn state(&self) -> DVector<f64> {
         self.log_posterior
