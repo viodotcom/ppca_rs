@@ -214,6 +214,18 @@ impl PPCAMix {
         }
     }
 
+    /// Builds a new [`InferredMaskedMix`] from the raw values.
+    pub fn inferred_one(
+        &self,
+        log_posterior: DVector<f64>,
+        inferred: Vec<InferredMasked>,
+    ) -> InferredMaskedMix {
+        InferredMaskedMix {
+            log_posterior,
+            inferred,
+        }
+    }
+
     /// Infers the probability distribution of a given dataset.
     pub fn infer(&self, dataset: &Dataset) -> Vec<InferredMaskedMix> {
         dataset
@@ -353,7 +365,7 @@ impl InferredMaskedMix {
         self.log_posterior.map(f64::exp)
     }
 
-    /// A slice of the [`InferredMasked`] for each constituent model in the mixture. 
+    /// A slice of the [`InferredMasked`] for each constituent model in the mixture.
     pub fn sub_states(&self) -> &[InferredMasked] {
         &self.inferred
     }
