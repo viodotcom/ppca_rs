@@ -1,5 +1,8 @@
 use nalgebra::DMatrix;
-use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
+use numpy::{
+    PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods,
+    ToPyArray,
+};
 use pyo3::{prelude::*, types::PyBytes};
 use rand_distr::Distribution;
 use rayon::prelude::*;
@@ -13,7 +16,7 @@ use crate::utils::{to_nalgebra, to_nalgebra_vector};
 
 /// This module is implemented in Rust.
 #[pymodule]
-pub fn ppca_rs(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+pub fn ppca_rs(_py: Python<'_>, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PriorWrapper>()?;
     m.add_class::<PPCAModelWrapper>()?;
     m.add_class::<DatasetWrapper>()?;
@@ -64,21 +67,21 @@ impl DatasetWrapper {
     }
 
     #[staticmethod]
-    fn load(bytes: &PyBytes) -> PyResult<DatasetWrapper> {
+    fn load(bytes: &Bound<PyBytes>) -> PyResult<DatasetWrapper> {
         Ok(DatasetWrapper(
             bincode::deserialize(bytes.as_bytes())
                 .map_err(|err| pyo3::exceptions::PyException::new_err(err.to_string()))?,
         ))
     }
 
-    fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
-        PyBytes::new(
+    fn dump<'a>(&self, py: Python<'a>) -> Bound<'a, PyBytes> {
+        PyBytes::new_bound(
             py,
             &bincode::serialize(&self.0).expect("can always serialize PPCA model"),
         )
     }
 
-    fn numpy(&self, py: Python) -> Py<PyArray2<f64>> {
+    fn numpy<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray2<f64>> {
         let rows = py.allow_threads(|| {
             self.0
                 .data
@@ -88,7 +91,7 @@ impl DatasetWrapper {
         });
 
         let matrix = DMatrix::from_columns(&rows).transpose();
-        matrix.to_pyarray(py).to_owned()
+        matrix.to_pyarray_bound(py)
     }
 
     fn __len__(&self) -> usize {
@@ -103,8 +106,8 @@ impl DatasetWrapper {
         self.0.empty_dimensions()
     }
 
-    fn weights(&self, py: Python<'_>) -> Py<PyArray1<f64>> {
-        self.0.weights.to_pyarray(py).to_owned()
+    fn weights<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray1<f64>> {
+        self.0.weights.to_pyarray_bound(py)
     }
 
     fn chunks(slf: Py<Self>, py: Python, chunks: usize) -> DatasetChunks {
@@ -208,9 +211,9 @@ struct InferredMaskedBatch {
 
 #[pymethods]
 impl InferredMaskedBatch {
-    fn states(&self, py: Python) -> Py<PyArray2<f64>> {
+    fn states<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray2<f64>> {
         if self.data.len() == 0 {
-            return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
+            return DMatrix::<f64>::zeros(0, 0).to_pyarray_bound(py);
         }
 
         let rows = py.allow_threads(|| {
@@ -222,14 +225,14 @@ impl InferredMaskedBatch {
                 .collect::<Vec<_>>()
         });
         let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
-        matrix.to_pyarray(py).to_owned()
+        matrix.to_pyarray_bound(py)
     }
 
-    fn covariances(&self, py: Python) -> Vec<Py<PyArray2<f64>>> {
+    fn covariances<'a>(&self, py: Python<'a>) -> Vec<Bound<'a, PyArray2<f64>>> {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
-            .map(|inferred| inferred.covariance().to_pyarray(py).to_owned())
+            .map(|inferred| inferred.covariance().to_pyarray_bound(py))
             .collect()
     }
 
@@ -266,16 +269,15 @@ impl InferredMaskedBatch {
         DatasetWrapper(outputs)
     }
 
-    fn smoothed_covariances(&self, py: Python, ppca: &PPCAModelWrapper) -> Vec<Py<PyArray2<f64>>> {
+    fn smoothed_covariances<'a>(
+        &self,
+        py: Python<'a>,
+        ppca: &PPCAModelWrapper,
+    ) -> Vec<Bound<'a, PyArray2<f64>>> {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
-            .map(|inferred| {
-                inferred
-                    .smoothed_covariance(&ppca.0)
-                    .to_pyarray(py)
-                    .to_owned()
-            })
+            .map(|inferred| inferred.smoothed_covariance(&ppca.0).to_pyarray_bound(py))
             .collect()
     }
 
@@ -292,12 +294,12 @@ impl InferredMaskedBatch {
         DatasetWrapper(output_covariances_diagonal)
     }
 
-    fn extrapolated_covariances(
+    fn extrapolated_covariances<'a>(
         &self,
-        py: Python,
+        py: Python<'a>,
         ppca: &PPCAModelWrapper,
         dataset: &DatasetWrapper,
-    ) -> Vec<Py<PyArray2<f64>>> {
+    ) -> Vec<Bound<'a, PyArray2<f64>>> {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
@@ -305,8 +307,7 @@ impl InferredMaskedBatch {
             .map(|(inferred, sample)| {
                 inferred
                     .extrapolated_covariance(&ppca.0, sample)
-                    .to_pyarray(py)
-                    .to_owned()
+                    .to_pyarray_bound(py)
             })
             .collect()
     }
@@ -386,15 +387,15 @@ impl PPCAModelWrapper {
     }
 
     #[staticmethod]
-    fn load(bytes: &PyBytes) -> PyResult<PPCAModelWrapper> {
+    fn load(bytes: Bound<PyBytes>) -> PyResult<PPCAModelWrapper> {
         Ok(PPCAModelWrapper(
             bincode::deserialize(bytes.as_bytes())
                 .map_err(|err| pyo3::exceptions::PyException::new_err(err.to_string()))?,
         ))
     }
 
-    fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
-        PyBytes::new(
+    fn dump<'a>(&self, py: Python<'a>) -> Bound<'a, PyBytes> {
+        PyBytes::new_bound(
             py,
             &bincode::serialize(&self.0).expect("can always serialize PPCA model"),
         )
@@ -416,18 +417,17 @@ impl PPCAModelWrapper {
     }
 
     #[getter]
-    fn singular_values(&self, py: Python<'_>) -> Py<PyArray1<f64>> {
+    fn singular_values<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray1<f64>> {
         self.0
             .singular_values()
-            .to_pyarray(py)
+            .to_pyarray_bound(py)
             .reshape((self.0.state_size(),))
             .expect("resizing is valid")
-            .to_owned()
     }
 
     #[getter]
-    fn transform(&self, py: Python<'_>) -> Py<PyArray2<f64>> {
-        self.0.transform().to_pyarray(py).to_owned()
+    fn transform<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray2<f64>> {
+        self.0.transform().to_pyarray_bound(py)
     }
 
     #[getter]
@@ -436,14 +436,13 @@ impl PPCAModelWrapper {
     }
 
     #[getter]
-    fn mean(&self, py: Python<'_>) -> Py<PyArray1<f64>> {
+    fn mean<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray1<f64>> {
         self.0
             .mean()
             .transpose()
-            .to_pyarray(py)
+            .to_pyarray_bound(py)
             .reshape((self.0.mean().len(),))
             .expect("resizing is valid")
-            .to_owned()
     }
 
     #[staticmethod]
@@ -467,12 +466,11 @@ impl PPCAModelWrapper {
         py.allow_threads(|| self.0.llk(&dataset.0))
     }
 
-    fn llks(&self, py: Python<'_>, dataset: &DatasetWrapper) -> Py<PyArray1<f64>> {
+    fn llks<'a>(&self, py: Python<'a>, dataset: &DatasetWrapper) -> Bound<'a, PyArray1<f64>> {
         let llks = py.allow_threads(|| self.0.llks(&dataset.0));
-        llks.to_pyarray(py)
+        llks.to_pyarray_bound(py)
             .reshape(llks.len())
             .expect("can reshape")
-            .to_owned()
     }
 
     fn sample(&self, py: Python<'_>, dataset_size: usize, mask_prob: f64) -> DatasetWrapper {
@@ -511,7 +509,7 @@ impl PPCAModelWrapper {
     }
 
     pub fn __setstate__(&mut self, py: Python, state: PyObject) -> PyResult<()> {
-        match state.extract::<&PyBytes>(py) {
+        match state.extract::<Bound<PyBytes>>(py) {
             Ok(s) => {
                 self.0 = PPCAModelWrapper::load(s)?.0;
                 Ok(())
@@ -524,10 +522,10 @@ impl PPCAModelWrapper {
         Ok(self.dump(py).to_object(py))
     }
 
-    pub fn __getnewargs__(
+    pub fn __getnewargs__<'a>(
         &self,
-        py: Python<'_>,
-    ) -> PyResult<(f64, Py<PyArray2<f64>>, Py<PyArray1<f64>>)> {
+        py: Python<'a>,
+    ) -> PyResult<(f64, Bound<'a, PyArray2<f64>>, Bound<'a, PyArray1<f64>>)> {
         Ok((self.isotropic_noise(), self.transform(py), self.mean(py)))
     }
 }
@@ -569,15 +567,15 @@ impl PPCAMixWrapper {
     }
 
     #[staticmethod]
-    fn load(bytes: &PyBytes) -> PyResult<PPCAMixWrapper> {
+    fn load(bytes: Bound<PyBytes>) -> PyResult<PPCAMixWrapper> {
         Ok(PPCAMixWrapper(
             bincode::deserialize(bytes.as_bytes())
                 .map_err(|err| pyo3::exceptions::PyException::new_err(err.to_string()))?,
         ))
     }
 
-    fn dump<'a>(&self, py: Python<'a>) -> &'a PyBytes {
-        PyBytes::new(
+    fn dump<'a>(&self, py: Python<'a>) -> Bound<'a, PyBytes> {
+        PyBytes::new_bound(
             py,
             &bincode::serialize(&self.0).expect("can always serialize PPCA model"),
         )
@@ -609,33 +607,30 @@ impl PPCAMixWrapper {
     }
 
     #[getter]
-    fn log_weights(&self, py: Python) -> Py<PyArray1<f64>> {
+    fn log_weights<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray1<f64>> {
         self.0
             .log_weights()
             .clone()
-            .to_pyarray(py)
+            .to_pyarray_bound(py)
             .reshape(self.0.log_weights().len())
             .expect("can reshape")
-            .to_owned()
     }
 
     #[getter]
-    fn weights(&self, py: Python) -> Py<PyArray1<f64>> {
+    fn weights<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray1<f64>> {
         self.0
             .weights()
             .clone()
-            .to_pyarray(py)
+            .to_pyarray_bound(py)
             .reshape(self.0.log_weights().len())
             .expect("can reshape")
-            .to_owned()
     }
 
-    pub fn llks(&self, py: Python, dataset: &DatasetWrapper) -> Py<PyArray1<f64>> {
+    pub fn llks<'a>(&self, py: Python<'a>, dataset: &DatasetWrapper) -> Bound<'a, PyArray1<f64>> {
         let llks = py.allow_threads(|| self.0.llks(&dataset.0));
-        llks.to_pyarray(py)
+        llks.to_pyarray_bound(py)
             .reshape(llks.len())
             .expect("can reshape")
-            .to_owned()
     }
 
     pub fn llk(&self, py: Python, dataset: &DatasetWrapper) -> f64 {
@@ -651,10 +646,13 @@ impl PPCAMixWrapper {
         DatasetWrapper(py.allow_threads(|| self.0.sample(dataset_size, mask_probability)))
     }
 
-    pub fn infer_cluster(&self, py: Python, dataset: &DatasetWrapper) -> Py<PyArray2<f64>> {
+    fn infer_cluster<'a>(
+        &self,
+        py: Python<'a>,
+        dataset: &DatasetWrapper,
+    ) -> Bound<'a, PyArray2<f64>> {
         py.allow_threads(|| self.0.infer_cluster(&dataset.0))
-            .to_pyarray(py)
-            .to_owned()
+            .to_pyarray_bound(py)
     }
 
     pub fn infer(&self, py: Python<'_>, dataset: &DatasetWrapper) -> InferredMaskedMixBatch {
@@ -689,7 +687,7 @@ impl PPCAMixWrapper {
     }
 
     pub fn __setstate__(&mut self, py: Python, state: PyObject) -> PyResult<()> {
-        match state.extract::<&PyBytes>(py) {
+        match state.extract::<Bound<PyBytes>>(py) {
             Ok(s) => {
                 self.0 = PPCAMixWrapper::load(s)?.0;
                 Ok(())
@@ -702,10 +700,10 @@ impl PPCAMixWrapper {
         Ok(self.dump(py).to_object(py))
     }
 
-    pub fn __getnewargs__(
+    pub fn __getnewargs__<'a>(
         &self,
-        py: Python<'_>,
-    ) -> PyResult<(Vec<PPCAModelWrapper>, Py<PyArray1<f64>>)> {
+        py: Python<'a>,
+    ) -> PyResult<(Vec<PPCAModelWrapper>, Bound<'a, PyArray1<f64>>)> {
         Ok((self.models(), self.log_weights(py)))
     }
 }
@@ -718,9 +716,9 @@ struct InferredMaskedMixBatch {
 
 #[pymethods]
 impl InferredMaskedMixBatch {
-    fn log_posteriors(&self, py: Python) -> Py<PyArray2<f64>> {
+    fn log_posteriors<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray2<f64>> {
         if self.data.len() == 0 {
-            return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
+            return DMatrix::<f64>::zeros(0, 0).to_pyarray_bound(py);
         }
 
         let rows = py.allow_threads(|| {
@@ -731,12 +729,12 @@ impl InferredMaskedMixBatch {
         });
         let matrix =
             DMatrix::from_row_slice(self.data.len(), self.data[0].log_posterior().len(), &rows);
-        matrix.to_pyarray(py).to_owned()
+        matrix.to_pyarray_bound(py)
     }
 
-    fn posteriors(&self, py: Python) -> Py<PyArray2<f64>> {
+    fn posteriors<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray2<f64>> {
         if self.data.len() == 0 {
-            return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
+            return DMatrix::<f64>::zeros(0, 0).to_pyarray_bound(py);
         }
 
         let rows = py.allow_threads(|| {
@@ -747,12 +745,12 @@ impl InferredMaskedMixBatch {
         });
         let matrix =
             DMatrix::from_row_slice(self.data.len(), self.data[0].log_posterior().len(), &rows);
-        matrix.to_pyarray(py).to_owned()
+        matrix.to_pyarray_bound(py)
     }
 
-    fn states(&self, py: Python) -> Py<PyArray2<f64>> {
+    fn states<'a>(&self, py: Python<'a>) -> Bound<'a, PyArray2<f64>> {
         if self.data.len() == 0 {
-            return DMatrix::<f64>::zeros(0, 0).to_pyarray(py).to_owned();
+            return DMatrix::<f64>::zeros(0, 0).to_pyarray_bound(py);
         }
 
         let rows = py.allow_threads(|| {
@@ -762,14 +760,14 @@ impl InferredMaskedMixBatch {
                 .collect::<Vec<_>>()
         });
         let matrix = DMatrix::from_row_slice(self.data.len(), self.data[0].state().len(), &rows);
-        matrix.to_pyarray(py).to_owned()
+        matrix.to_pyarray_bound(py)
     }
 
-    fn covariances(&self, py: Python) -> Vec<Py<PyArray2<f64>>> {
+    fn covariances<'a>(&self, py: Python<'a>) -> Vec<Bound<'a, PyArray2<f64>>> {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
-            .map(|inferred| inferred.covariance().to_pyarray(py).to_owned())
+            .map(|inferred| inferred.covariance().to_pyarray_bound(py))
             .collect()
     }
 
@@ -806,16 +804,15 @@ impl InferredMaskedMixBatch {
         DatasetWrapper(outputs)
     }
 
-    fn smoothed_covariances(&self, py: Python, ppca: &PPCAMixWrapper) -> Vec<Py<PyArray2<f64>>> {
+    fn smoothed_covariances<'a>(
+        &self,
+        py: Python<'a>,
+        ppca: &PPCAMixWrapper,
+    ) -> Vec<Bound<'a, PyArray2<f64>>> {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
-            .map(|inferred| {
-                inferred
-                    .smoothed_covariance(&ppca.0)
-                    .to_pyarray(py)
-                    .to_owned()
-            })
+            .map(|inferred| inferred.smoothed_covariance(&ppca.0).to_pyarray_bound(py))
             .collect()
     }
 
@@ -832,12 +829,12 @@ impl InferredMaskedMixBatch {
         DatasetWrapper(output_covariances_diagonal)
     }
 
-    fn extrapolated_covariances(
+    fn extrapolated_covariances<'a>(
         &self,
-        py: Python,
+        py: Python<'a>,
         ppca: &PPCAMixWrapper,
         dataset: &DatasetWrapper,
-    ) -> Vec<Py<PyArray2<f64>>> {
+    ) -> Vec<Bound<'a, PyArray2<f64>>> {
         // No par iter for you because Python is not Sync.
         self.data
             .iter()
@@ -845,8 +842,7 @@ impl InferredMaskedMixBatch {
             .map(|(inferred, sample)| {
                 inferred
                     .extrapolated_covariance(&ppca.0, sample)
-                    .to_pyarray(py)
-                    .to_owned()
+                    .to_pyarray_bound(py)
             })
             .collect()
     }

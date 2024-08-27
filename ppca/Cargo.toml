@@ -1,6 +1,6 @@
 [package]
 name = "ppca"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 authors = ["Pedro Bittencourt Arruda <pedrobittencourt3@gmail.com>"]
 description = "Rust implementation of the Probabilistic Principal Component Analysis model"
@@ -22,12 +22,12 @@ categories = ["algorithms", "data-structures", "mathematics"]
 [dependencies]
 
 approx = "0.5.1"
-bit-vec = { version = "0.6.3", features = ["serde"] }
-nalgebra = { version = "0.32.2", features = ["serde-serialize"] }
+bit-vec = { version = "0.8.0", features = ["serde"] }
+nalgebra = { version = "0.32.6", features = ["serde-serialize"] }
 rand = "0.8.5"
 rand_distr = "0.4.3"
 rayon = "1.7.0"
-ndarray = "0.15.6"
+ndarray = "0.16.1"
 serde = { version = "1.0.160", features = ["rc"] }
 serde_derive = "1.0.160"
-ordered-float = "3.6.0"
+ordered-float = "4.2.2"
