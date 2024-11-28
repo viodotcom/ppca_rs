@@ -193,7 +193,7 @@ impl Dataset {
     /// Lists the dimensions which as masked in __all__ samples in this dataset.
     pub fn empty_dimensions(&self) -> Vec<usize> {
         let Some(n_dimensions) = self.data.first().map(|sample| sample.mask().0.len()) else {
-            return vec![]
+            return vec![];
         };
         let new_mask = || BitVec::from_elem(n_dimensions, false);
         let poormans_or = |mut this: BitVec, other: &BitVec| {

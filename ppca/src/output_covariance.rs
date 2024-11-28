@@ -1,6 +1,7 @@
 use nalgebra::{DMatrix, DVector};
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::sync::OnceLock;
 
 use crate::utils::Mask;
 
@@ -21,6 +22,18 @@ pub(crate) struct OutputCovariance<'a> {
     pub(crate) isotropic_noise: f64,
     /// The matrix mapping hidden state to output state, denoted as `C`.
     pub(crate) transform: Cow<'a, DMatrix<f64>>,
+    #[serde(default)]
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    inner_product: OnceLock<DMatrix<f64>>,
+    #[serde(default)]
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    inner_matrix: OnceLock<DMatrix<f64>>,
+    #[serde(default)]
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    inner_inverse: OnceLock<DMatrix<f64>>,
 }
 
 impl<'a> OutputCovariance<'a> {
@@ -31,6 +44,9 @@ impl<'a> OutputCovariance<'a> {
         OutputCovariance {
             isotropic_noise,
             transform: Cow::Owned(transform),
+            inner_product: OnceLock::new(),
+            inner_matrix: OnceLock::new(),
+            inner_inverse: OnceLock::new(),
         }
     }
 
@@ -54,19 +70,32 @@ impl<'a> OutputCovariance<'a> {
     //         + &*self.transform * self.transform.transpose()
     // }
 
-    pub(crate) fn inner_product(&self) -> DMatrix<f64> {
+    fn do_inner_product(&self) -> DMatrix<f64> {
         self.transform.transpose() * &*self.transform
     }
 
-    pub(crate) fn inner_matrix(&self) -> DMatrix<f64> {
-        DMatrix::identity(self.state_size(), self.state_size()) * self.isotropic_noise.powi(2)
-            + self.inner_product()
+    fn inner_product(&self) -> &DMatrix<f64> {
+        self.inner_product.get_or_init(|| self.do_inner_product())
     }
 
-    pub(crate) fn inner_inverse(&self) -> DMatrix<f64> {
+    fn do_inner_matrix(&self) -> DMatrix<f64> {
+        DMatrix::identity(self.state_size(), self.state_size())
+            + self.inner_product() / self.isotropic_noise.powi(2)
+    }
+
+    fn inner_matrix(&self) -> &DMatrix<f64> {
+        self.inner_matrix.get_or_init(|| self.do_inner_matrix())
+    }
+
+    fn do_inner_inverse(&self) -> DMatrix<f64> {
         self.inner_matrix()
+            .clone()
             .try_inverse()
             .expect("inner matrix is always invertible")
+    }
+
+    fn inner_inverse(&self) -> &DMatrix<f64> {
+        self.inner_inverse.get_or_init(|| self.do_inner_inverse())
     }
 
     /// Calculates the linear transformation that estimates the hidden state from the
@@ -86,18 +115,21 @@ impl<'a> OutputCovariance<'a> {
     /// ```
     /// C^T/sigma^2 - C^T*C/sigma^2*(I + C^T*C/sigma^2)^-1*C^T/sigma^2
     /// ```
-    /// Which can be calculated in `O(output_length * state_length^3)`.
+    /// Which can be calculated in `O(output_length * state_length^3)`. This can be futher simplified to
+    /// ```
+    /// (I - C^T*C/sigma^2*(I + C^T*C/sigma^2)^-1) * C^T/sigma^2
+    ///     = ((I + C^T*C/sigma^2) - C^T*C/sigma^2) * (I + C^T*C/sigma^2)^-1 * C^T/sigma^2
+    ///     = (I + C^T*C/sigma^2)^-1 * C^T/sigma^2
+    /// ```
+    /// Which retains the same complexity, but uses fewer operations.
     pub(crate) fn estimator_transform(&self) -> DMatrix<f64> {
-        (self.transform.transpose()
-            - self.inner_product() * self.inner_inverse() * self.transform.transpose())
-            / self.isotropic_noise.powi(2)
+        self.inner_inverse() * self.transform.transpose() / self.isotropic_noise.powi(2)
     }
 
     /// The covariance of the estimator that estimates hidden state from the observation.
     /// See `OutputCovariance.estimator_transform` for the explanation on the derivation.
     pub(crate) fn estimator_covariance(&self) -> DMatrix<f64> {
-        DMatrix::identity(self.state_size(), self.state_size())
-            - self.estimator_transform() * &*self.transform
+        self.inner_inverse().clone()
     }
 
     /// Calculates the log of the determinant of the output covariance matrix form masked
@@ -105,29 +137,19 @@ impl<'a> OutputCovariance<'a> {
     /// ```
     /// det(I * sigma^2 + C * C^T) = det(I + C^T * C / sigma^2) * det(I * sigma^2)
     /// ```
-    /// This can be simplified to
-    /// ```
-    /// det(I * sigma^2 + C * C^T) = det(I * sigma^2 + C^T * C)
-    ///     * sigma^(2 * (output_size - state_size))
-    /// ```
     /// The first `det` on the right side is the determinant of
     /// `OutputCovariance.inner_matrix`.
     pub(crate) fn covariance_log_det(&self) -> f64 {
-        // NOTE: not always `output_size > state_size`.
         self.inner_matrix().determinant().ln()
-            + self.isotropic_noise.ln()
-                * 2.0
-                * (self.output_size() as f64 - self.state_size() as f64)
+            + self.isotropic_noise.ln() * 2.0 * (self.output_size() as f64)
     }
 
     pub(crate) fn masked(&self, mask: &Mask) -> OutputCovariance<'static> {
         assert_eq!(mask.0.len(), self.output_size());
-        OutputCovariance {
-            isotropic_noise: self.isotropic_noise,
-            transform: Cow::Owned(DMatrix::from_rows(
-                &mask.filter(self.transform.row_iter()).collect::<Vec<_>>(),
-            )),
-        }
+        OutputCovariance::new_owned(
+            self.isotropic_noise,
+            DMatrix::from_rows(&mask.filter(self.transform.row_iter()).collect::<Vec<_>>()),
+        )
     }
 
     pub(crate) fn quadratic_form(&self, x: &DVector<f64>) -> f64 {
@@ -135,9 +157,9 @@ impl<'a> OutputCovariance<'a> {
         let transpose_transformed = self.transform.transpose() * x;
 
         (norm_squared
-            // this is a scalar.
             - (transpose_transformed.transpose() * self.inner_inverse() * transpose_transformed)
-                [(0, 0)])
+                [(0, 0)]
+                / self.isotropic_noise.powi(2))
             / self.isotropic_noise.powi(2)
     }
 }

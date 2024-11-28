@@ -5,7 +5,6 @@ use rand::Rng;
 use rand_distr::Bernoulli;
 use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::dataset::{Dataset, MaskedSample};
@@ -61,10 +60,7 @@ impl PPCAModel {
         }
 
         PPCAModel(Arc::new(PPCAModelInner {
-            output_covariance: OutputCovariance {
-                isotropic_noise: 1.0,
-                transform: Cow::Owned(rand_transform),
-            },
+            output_covariance: OutputCovariance::new_owned(1.0, rand_transform),
             mean: DVector::zeros(output_size),
         }))
     }
@@ -384,10 +380,10 @@ impl PPCAModel {
         }
 
         PPCAModel(Arc::new(PPCAModelInner {
-            output_covariance: OutputCovariance {
-                transform: Cow::Owned(new_transform),
-                isotropic_noise: isotropic_noise_sq.sqrt(),
-            },
+            output_covariance: OutputCovariance::new_owned(
+                isotropic_noise_sq.sqrt(),
+                new_transform,
+            ),
             mean: new_mean,
         }))
     }
