@@ -1,6 +1,6 @@
 use nalgebra::DMatrix;
-use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
-use pyo3::{prelude::*, types::PyBytes};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3, ToPyArray};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes};
 use rand_distr::Distribution;
 use rayon::prelude::*;
 
@@ -89,6 +89,59 @@ impl DatasetWrapper {
 
         let matrix = DMatrix::from_columns(&rows).transpose();
         matrix.to_pyarray(py).to_owned()
+    }
+
+    fn with_priors(
+        &self,
+        py: Python,
+        prior_means: PyReadonlyArray2<f64>,
+        prior_covs: PyReadonlyArray3<f64>,
+    ) -> PyResult<DatasetWrapper> {
+        if !(prior_means.shape()[0] == self.0.len()
+            && prior_covs.shape()[0] == self.0.len()
+            && prior_covs.shape()[1] == prior_means.shape()[1]
+            && prior_covs.shape()[2] == prior_means.shape()[1])
+        {
+            return Err(PyValueError::new_err(format!(
+                "Mismatched prior dimensions: dataset size is {}, mean shape is {:?} \
+                and cov shape is {:?}",
+                self.0.len(),
+                prior_means.shape(),
+                prior_covs.shape(),
+            )));
+        }
+
+        let n_samples = prior_means.shape()[0];
+        let state_size = prior_means.shape()[1];
+        let prior_mean_array_view = prior_means.as_array();
+        let prior_cov_array_view = prior_covs.as_array();
+
+        let prior_means = py.allow_threads(|| {
+            (0..n_samples)
+                .into_par_iter()
+                .map(|sample_idx| {
+                    (0..state_size)
+                        .map(|i| prior_mean_array_view[(sample_idx, i)])
+                        .collect::<Vec<f64>>()
+                        .into()
+                })
+                .collect::<Vec<_>>()
+        });
+
+        let prior_covs = py.allow_threads(|| {
+            (0..n_samples)
+                .into_par_iter()
+                .map(|sample_idx| {
+                    DMatrix::from_fn(state_size, state_size, |i, j| {
+                        prior_cov_array_view[(sample_idx, i, j)]
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
+
+        Ok(DatasetWrapper(
+            self.0.clone().with_priors(prior_means, prior_covs),
+        ))
     }
 
     fn __len__(&self) -> usize {
